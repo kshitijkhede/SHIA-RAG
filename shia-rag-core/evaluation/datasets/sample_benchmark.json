@@ -1,0 +1,34 @@
+[
+  {
+    "query_id": "Q-001",
+    "query": "What is the exact mechanism of Transmission Control Protocol (TCP) flow control?",
+    "routing_mode": "FACTUAL",
+    "gold_concepts": ["KN-TCP01", "KN-TRN01", "KN-NET01", "KN-CS001"],
+    "gold_ancestor_chain": ["KN-CS001", "KN-NET01", "KN-TRN01"],
+    "gold_answer": "TCP guarantees reliable, in-order byte stream delivery with congestion control."
+  },
+  {
+    "query_id": "Q-002",
+    "query": "Summarize the architecture and overview of Artificial Intelligence and Machine Learning",
+    "routing_mode": "THEMATIC",
+    "gold_concepts": ["KN-AI001", "KN-ML001", "KN-CS001"],
+    "gold_ancestor_chain": ["KN-CS001"],
+    "gold_answer": "Artificial Intelligence studies computational agents capable of perception and reasoning, while Machine Learning constructs statistical models from data."
+  },
+  {
+    "query_id": "Q-003",
+    "query": "Compare TCP versus UDP in transport protocols.",
+    "routing_mode": "MULTIHOP",
+    "gold_concepts": ["KN-TCP01", "KN-UDP01", "KN-TRN01", "KN-NET01"],
+    "gold_ancestor_chain": ["KN-CS001", "KN-NET01", "KN-TRN01"],
+    "gold_answer": "TCP guarantees reliable byte stream delivery, whereas UDP offers connectionless datagram transmission without reliability guarantees."
+  },
+  {
+    "query_id": "Q-004",
+    "query": "Define Stochastic Gradient Descent.",
+    "routing_mode": "PARAMETRIC",
+    "gold_concepts": ["KN-SGD01", "KN-OPT01", "KN-ML001", "KN-AI001"],
+    "gold_ancestor_chain": ["KN-CS001", "KN-AI001", "KN-ML001", "KN-OPT01"],
+    "gold_answer": "Stochastic Gradient Descent updates parameters iteratively using mini-batch gradient approximations."
+  }
+]

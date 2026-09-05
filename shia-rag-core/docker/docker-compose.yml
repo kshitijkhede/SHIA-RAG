@@ -1,0 +1,112 @@
+services:
+  # ── PostgreSQL 16 (Document Storage + pgvector) ──
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: shia-rag-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: shia_rag
+      POSTGRES_USER: shia_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shia_dev_password}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shia_admin -d shia_rag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Neo4j 5.x (Knowledge Forest Graph Database) ──
+  neo4j:
+    image: neo4j:5-community
+    container_name: shia-rag-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"   # HTTP browser
+      - "7687:7687"   # Bolt protocol
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-shia_dev_password}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_memory_pagecache_size: 512M
+      NEO4J_dbms_memory_heap_max__size: 512M
+    volumes:
+      - neo4jdata:/data
+      - ./docker/init_db.cypher:/var/lib/neo4j/import/init_db.cypher
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-shia_dev_password}", "RETURN 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Milvus 2.4 (Vector Database for ANN Search) ──
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: shia-rag-milvus-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+    volumes:
+      - etcddata:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+
+  milvus-minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: shia-rag-milvus-minio
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - miniodata:/minio_data
+    command: minio server /minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: shia-rag-milvus
+    restart: unless-stopped
+    ports:
+      - "19530:19530"  # gRPC
+      - "9091:9091"    # Metrics
+    depends_on:
+      - milvus-etcd
+      - milvus-minio
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    volumes:
+      - milvusdata:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ── Redis 7.2 (Cache & Feedback Queue) ──
+  redis:
+    image: redis:7.2-alpine
+    container_name: shia-rag-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  neo4jdata:
+  etcddata:
+  miniodata:
+  milvusdata:
+  redisdata:

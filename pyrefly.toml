@@ -1,0 +1,6 @@
+python-interpreter-path = "/home/itadmin/Desktop/Rag/shia-rag-core/.venv/bin/python3"
+search-path = [
+    "shia-rag-core",
+    "shia-rag-core/src",
+    "shia-rag-core/evaluation",
+]

@@ -1,0 +1,89 @@
+# ============================================================
+# SHIA-RAG 2.0 — System Configuration
+# Single Source of Truth for all tunable parameters
+# ============================================================
+
+# ── Layer 0: Data Model Constraints ──
+data_model:
+  max_tree_depth: 8                    # D_max: Hard depth limit for knowledge forest
+  min_confidence_threshold: 0.75       # Minimum KCE confidence to enter CPG++
+  node_id_prefix: "KN"                 # Prefix for KnowledgeNode IDs
+  node_id_length: 6                    # Length of alphanumeric ID suffix (e.g., KN-000456)
+
+# ── Layer 3: Extraction Parameters ──
+extraction:
+  lsh_num_perm: 128                    # MinHash LSH number of permutations
+  lsh_jaccard_threshold: 0.60          # Jaccard similarity threshold for deduplication
+  max_concepts_per_block: 12           # Max concepts extracted from a single text block
+  spacy_model: "en_core_web_lg"        # spaCy model for NER
+
+# ── Layer 5: SHIA Core — PRE Weights ──
+pre_weights:
+  w1_cosine_similarity: 0.30           # Embedding similarity weight
+  w2_hypernym_score: 0.25              # Hypernym verification weight
+  w3_depth_factor: 0.15                # Depth penalty weight
+  w4_evidence_support: 0.20            # Co-occurrence evidence weight
+  w5_parent_confidence: 0.10           # Parent node KCE confidence weight
+  # INVARIANT: Sum must equal 1.0
+
+# ── Layer 5: SHIA Core — Hierarchy Induction ──
+hierarchy:
+  cpg_max_candidates: 25               # Max candidate parents per node in CPG++
+  cpg_ann_k: 50                        # ANN search top-k for candidate generation
+  min_sibling_coherence: 0.40          # Minimum mean cosine similarity among siblings
+  energy_depth_penalty_lambda: 0.15    # λ_depth in global energy function
+
+# ── Layer 6: Retrieval & DC-Knapsack ──
+retrieval:
+  default_token_budget: 3072           # Default B (token budget) for DC-Knapsack
+  max_subgraph_nodes: 150              # If |V'| > this, fall back to greedy density packing
+  ann_search_k: 30                     # Top-k initial vector search results
+
+# ── Layer 7: Generation ──
+generation:
+  llm_model: "meta-llama/Llama-3.1-8B-Instruct"  # Default LLM for generation
+  llm_temperature: 0.1                 # Low temperature for factual generation
+  llm_max_output_tokens: 1024          # Max output tokens
+  citation_overlap_threshold: 0.50     # Minimum lexical overlap for claim verification
+
+# ── Layer 8: Thompson Sampling Evolution ──
+thompson_sampling:
+  initial_alpha: 1.0                   # Beta prior alpha (successes)
+  initial_beta: 1.0                    # Beta prior beta (failures)
+  laplacian_gamma: 0.05                # γ: Laplacian smoothing coefficient
+  smoothing_interval_queries: 100      # Apply Laplacian smoothing every N queries
+
+# ── Database Connections ──
+databases:
+  postgresql:
+    host: "localhost"
+    port: 5432
+    database: "shia_rag"
+    user: "shia_admin"
+    # password loaded from environment: POSTGRES_PASSWORD
+  neo4j:
+    uri: "bolt://localhost:7687"
+    user: "neo4j"
+    # password loaded from environment: NEO4J_PASSWORD
+  milvus:
+    host: "localhost"
+    port: 19530
+    collection_name: "shia_rag_embeddings"
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+
+# ── Embedding Model ──
+embedding:
+  model_name: "BAAI/bge-base-en-v1.5"
+  dimension: 768
+  query_prefix: "Represent this sentence for searching relevant passages: "
+  max_seq_length: 512
+
+# ── Logging ──
+logging:
+  level: "INFO"                        # DEBUG | INFO | WARNING | ERROR
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {module}:{function}:{line} | {message}"
+  rotation: "100 MB"
+  retention: "30 days"

@@ -1,0 +1,21 @@
+{
+  "include": [
+    "shia-rag-core",
+    "docs/scripts"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "shia-rag-core/.venv"
+  ],
+  "venvPath": "shia-rag-core",
+  "venv": ".venv",
+  "extraPaths": [
+    "shia-rag-core",
+    "shia-rag-core/src",
+    "shia-rag-core/evaluation"
+  ],
+  "pythonVersion": "3.11",
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false
+}

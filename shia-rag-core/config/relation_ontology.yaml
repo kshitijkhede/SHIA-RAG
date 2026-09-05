@@ -1,0 +1,72 @@
+# ============================================================
+# SHIA-RAG 2.0 — Relation Ontology Definition
+# Permitted edge predicates for the Knowledge Forest
+# ============================================================
+
+# ── Hierarchical Edge Types ──
+# These form the acyclic taxonomy (DAG invariant enforced)
+hierarchical_relations:
+  - predicate: "IS_A"
+    description: "Child concept is a subtype or instance of the parent concept."
+    example: "OSPF IS_A Link-State Protocol"
+    directionality: "child → parent"
+    cardinality: "many-to-one"  # Each node has at most one hierarchical parent
+
+  - predicate: "PART_OF"
+    description: "Child concept is a component, module, or subsystem of the parent concept."
+    example: "LSA Header PART_OF OSPF Packet"
+    directionality: "child → parent"
+    cardinality: "many-to-one"
+
+  - predicate: "INSTANCE_OF"
+    description: "Child concept is a concrete instance of an abstract parent class."
+    example: "BGP Route Reflector INSTANCE_OF Route Distribution Mechanism"
+    directionality: "child → parent"
+    cardinality: "many-to-one"
+
+# ── Semantic Edge Types ──
+# These form the cross-link web (no acyclicity constraint)
+semantic_relations:
+  - predicate: "USES"
+    description: "Source concept utilizes, invokes, or depends on the target concept."
+    example: "OSPF USES Dijkstra's Algorithm"
+    directionality: "source → target"
+    cardinality: "many-to-many"
+
+  - predicate: "CAUSES"
+    description: "Source concept directly causes, triggers, or enables the target concept."
+    example: "Link Failure CAUSES SPF Recalculation"
+    directionality: "source → target"
+    cardinality: "many-to-many"
+
+  - predicate: "COMPARED_TO"
+    description: "Source and target concepts are frequently compared or contrasted."
+    example: "OSPF COMPARED_TO RIP"
+    directionality: "bidirectional"
+    cardinality: "many-to-many"
+
+  - predicate: "PREREQUISITE_OF"
+    description: "Source concept must be understood before the target concept."
+    example: "Subnetting PREREQUISITE_OF VLSM"
+    directionality: "source → target"
+    cardinality: "many-to-many"
+
+  - predicate: "CONTRADICTS"
+    description: "Source concept provides conflicting information with the target concept."
+    example: "Claim A (from Paper X) CONTRADICTS Claim B (from Paper Y)"
+    directionality: "bidirectional"
+    cardinality: "many-to-many"
+
+# ── Projection Edge Types ──
+# These anchor Tier 2 concepts to Tier 1 document blocks
+projection_relations:
+  - predicate: "GROUNDED_IN"
+    description: "A concept node's claim is directly grounded in a specific document text block."
+    directionality: "concept → document_block"
+    cardinality: "many-to-many"
+    properties:
+      - "doc_id"       # UUID of the source document
+      - "block_id"     # UUID of the specific text block
+      - "char_start"   # Character offset start in block
+      - "char_end"     # Character offset end in block
+      - "extraction_confidence"  # Float [0, 1]

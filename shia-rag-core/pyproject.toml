@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "shia-rag-core"
+version = "2.0.0"
+description = "SHIA-RAG: Semantic Hierarchy Induction Architecture for Retrieval-Augmented Generation"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "SHIA-RAG Research Team" },
+]
+
+dependencies = [
+    # Core
+    "pydantic>=2.0",
+    "numpy>=1.24",
+    "scipy>=1.11",
+
+    # NLP & Embeddings
+    "spacy>=3.7",
+    "tiktoken>=0.5",
+    "transformers>=4.35",
+    "sentence-transformers>=2.2",
+
+    # Vector / Graph / Relational DBs
+    "neo4j>=5.0",
+    "pymilvus>=2.3",
+    "psycopg2-binary>=2.9",
+    "pgvector>=0.2",
+
+    # API & Web
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+
+    # LLM Inference
+    "openai>=1.0",
+
+    # Caching & Messaging
+    "redis>=5.0",
+
+    # Document Processing
+    "pymupdf>=1.23",       # PDF extraction (fitz)
+    "python-docx>=1.0",    # DOCX extraction
+    "beautifulsoup4>=4.12", # HTML extraction
+    "pytesseract>=0.3",    # OCR
+
+    # MinHash LSH
+    "datasketch>=1.6",
+
+    # Utilities
+    "pyyaml>=6.0",
+    "loguru>=0.7",
+    "httpx>=0.25",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.1",
+    "ruff>=0.1",
+    "mypy>=1.7",
+    "pre-commit>=3.5",
+]
+eval = [
+    "rouge-score>=0.1",
+    "bert-score>=0.3",
+    "datasets>=2.14",     # HuggingFace datasets for HotpotQA, QuALITY
+]
+html-report = [
+    "markdown>=3.5",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E402", "E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

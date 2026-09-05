@@ -1,0 +1,23 @@
+{
+  "include": [
+    ".",
+    "src",
+    "evaluation",
+    "tests"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".venv"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": [
+    ".",
+    "src",
+    "evaluation"
+  ],
+  "pythonVersion": "3.11",
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false
+}
