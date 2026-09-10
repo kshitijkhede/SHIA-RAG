@@ -401,6 +401,14 @@ Document: "OS_Concepts.pdf"
 * **The Trap:** Testing evaluation methodology.
 * **Model Defense:** *"ROUGE and BLEU measure surface n-gram overlap. A generated answer could have a high ROUGE score by repeating keywords while hallucinating the core factual relationship. In SHEF 2.0, we prioritize: (1) **Parent Assignment Accuracy (PAA)** against gold taxonomies, (2) **Hop Recall** along verified reasoning chains, (3) **Context Density Score (CDS)** to measure evidence token efficiency, and (4) **Citation Faithfulness Score (CFS)** to guarantee that every claim is entailed by source text."*
 
+### Trap Q11: *"How does SHIA-RAG handle conversational multi-turn queries where the user simply asks 'can you give me more content' or 'elaborate on that'?"*
+* **The Trap:** Exposing the zero-utility knapsack trap where vague continuation queries have near-zero embedding similarity with technical knowledge nodes.
+* **Model Defense:** *"Standard dense bi-encoders fail on conversational follow-ups like 'give me more content' because there are no explicit domain entities, yielding near-zero cosine similarity with domain knowledge nodes. In standard knapsack packing, this results in an empty context or severe hallucination. In SHIA-RAG 2.0, we engineered our Hierarchical Multi-Turn Contextual Query Expansion Engine (Novelty 6): (1) An intent classifier detects continuation cues. (2) The system extracts the active topic anchor from preceding dialogue turns. (3) It traverses the active DAG topology to gather upstream parents (foundational concepts) and downstream descendants (granular definitions, properties, and examples). (4) It applies an anchor proximity boost ($\lambda_{\text{boost}} = 0.85$) and escalates the token budget ($1.5 \times B$), enabling the DC-Knapsack optimizer to retrieve rich, explanatory context with 100% verified citation fidelity."*
+
+### Trap Q12: *"Why does your system output clean Unicode math rather than raw LaTeX syntax or internal citation tags?"*
+* **The Trap:** Probing user-facing presentation versus internal attribution mechanics.
+* **Model Defense:** *"Raw LaTeX dollar delimiters (`$...$`) and internal bracketed node identifiers like `[KN-9A87FD]` cause severe visual clutter and degrade the end-user reading experience. In SHIA-RAG 2.0, we strictly decoupled verification from user presentation. In Layer 7, the Claim Attribution Verifier first validates every atomic proposition against referenced concept nodes and Tier 1 PDF bounding spans ($E_{\text{proj}}$), logging the verification reward $R \in [0, 1]$ into telemetry. Once verified, our deterministic sanitizer converts mathematical expressions into natural Unicode ($\alpha, \beta, \ne, \pm, b^2 - 4ac, ax^2 + bx + c = 0$) and strips bracketed node tokens, delivering pristine, human-grade conversational responses with 100% auditable provenance retained in the system metadata."*
+
 ---
 
 ## 6. Presentation & Slide-by-Slide Defense Script

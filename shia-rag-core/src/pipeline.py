@@ -54,7 +54,7 @@ from src.layer5_shia_core.fi_integrator import ForestIntegrator
 from src.layer5_shia_core.cld_crosslinker import CrossLinkDiscovery
 from src.layer6_retrieval.srdr_router import SelfReflectiveDepthRouter
 from src.layer6_retrieval.dc_knapsack import DAGKnapsackOptimizer, KnapsackItem
-from src.layer7_generation.citation_verifier import ClaimAttributionVerifier
+from src.layer7_generation import ClaimAttributionVerifier, NaturalLanguageSynthesizer
 from src.layer8_operations.thompson_evolution import ThompsonEvolutionEngine
 
 logging.basicConfig(
@@ -108,6 +108,7 @@ class SHIARAGPipeline:
         self.router = SelfReflectiveDepthRouter()
         self.knapsack = DAGKnapsackOptimizer(token_budget=token_budget)
         self.verifier = ClaimAttributionVerifier()
+        self.synthesizer = NaturalLanguageSynthesizer(self.verifier)
         self.evolution = ThompsonEvolutionEngine(
             smoothing_gamma=laplacian_gamma,
             smoothing_interval=smoothing_interval,
@@ -130,6 +131,12 @@ class SHIARAGPipeline:
         # Tier 1 Document Store
         self.documents: Dict[str, DocumentNode] = {}
         self.blocks: Dict[str, TextBlock] = {}
+
+        # Multi-Turn Conversational Memory
+        self.conversation_history: List[Dict[str, Any]] = []
+        self.last_query: Optional[str] = None
+        self.last_topic: Optional[str] = None
+        self.last_selected_node_ids: List[str] = []
 
     # ─────────────────────────────────────────────────────────────
     # Tier 1 & Tier 2 Forest Construction
@@ -189,6 +196,12 @@ class SHIARAGPipeline:
                     if is_valid:
                         validated_candidates.append((pid, score))
 
+        # Infer doc_id from source blocks if not explicitly provided
+        if not getattr(node, "doc_id", None) and node.source_block_ids:
+            first_block = self.blocks.get(node.source_block_ids[0])
+            if first_block and first_block.doc_id:
+                node = node.model_copy(update={"doc_id": first_block.doc_id})
+
         # Integrate via ForestIntegrator (places or promotes to root)
         updated_node, new_edge = self.integrator.integrate_node(
             node=node,
@@ -233,13 +246,102 @@ class SHIARAGPipeline:
         logger.info(f"KCE propagated confidence across {len(confidence_map)} nodes.")
         return confidence_map
 
-    def run_crosslink_discovery(self) -> List[KnowledgeEdge]:
+    def clear_forest(self) -> None:
+        """Completely resets all documents, blocks, concept nodes, and edges."""
+        self.nodes.clear()
+        self.edges.clear()
+        self.node_depth_map.clear()
+        self.forest_parents_map.clear()
+        self.forest_children_map.clear()
+        self.edge_priors.clear()
+        self.edge_id_to_nodes.clear()
+        self.embeddings.clear()
+        self.block_to_nodes.clear()
+        self.documents.clear()
+        self.blocks.clear()
+        self.conversation_history.clear()
+        self.last_query = None
+        self.last_topic = None
+        self.last_selected_node_ids.clear()
+        logger.info("Knowledge Forest reset to clean empty slate.")
+
+    def reset_conversation(self) -> None:
+        """Resets conversational memory without clearing the knowledge forest."""
+        self.conversation_history.clear()
+        self.last_query = None
+        self.last_topic = None
+        self.last_selected_node_ids.clear()
+        logger.info("Conversational memory reset to clean state.")
+
+    def clear(self) -> None:
+        """Alias for clear_forest."""
+        self.clear_forest()
+
+    def delete_document(self, doc_id: str) -> bool:
+        """
+        Removes a document and its dedicated concept tree completely from the forest.
+        
+        Cleans up:
+          - DocumentNode from self.documents
+          - TextBlocks belonging to doc_id from self.blocks
+          - KnowledgeNodes belonging to doc_id from self.nodes
+          - Associated edges, embeddings, parent/child maps, depth maps
+        """
+        if doc_id not in self.documents:
+            return False
+
+        # Identify blocks belonging to this document
+        block_ids_to_remove = {bid for bid, b in self.blocks.items() if b.doc_id == doc_id}
+        for bid in block_ids_to_remove:
+            self.blocks.pop(bid, None)
+            self.block_to_nodes.pop(bid, None)
+
+        # Identify nodes belonging to this document
+        node_ids_to_remove = set()
+        for nid, n in self.nodes.items():
+            if getattr(n, "doc_id", None) == doc_id:
+                node_ids_to_remove.add(nid)
+            elif any(bid in block_ids_to_remove for bid in n.source_block_ids):
+                node_ids_to_remove.add(nid)
+
+        # Remove edges connected to these nodes
+        self.edges = [e for e in self.edges if e.source_id not in node_ids_to_remove and e.target_id not in node_ids_to_remove]
+        self.edge_priors = {eid: p for eid, p in self.edge_priors.items() if eid in [e.edge_id for e in self.edges]}
+        self.edge_id_to_nodes = {eid: p for eid, p in self.edge_id_to_nodes.items() if eid in [e.edge_id for e in self.edges]}
+
+        # Remove nodes and metadata
+        for nid in node_ids_to_remove:
+            self.nodes.pop(nid, None)
+            self.node_depth_map.pop(nid, None)
+            self.embeddings.pop(nid, None)
+            self.forest_parents_map.pop(nid, None)
+            self.forest_children_map.pop(nid, None)
+
+        # Clean remaining child/parent maps
+        for nid, plist in list(self.forest_parents_map.items()):
+            self.forest_parents_map[nid] = [p for p in plist if p not in node_ids_to_remove]
+        for nid, clist in list(self.forest_children_map.items()):
+            self.forest_children_map[nid] = [c for c in clist if c not in node_ids_to_remove]
+
+        # Remove document record
+        doc_filename = self.documents.pop(doc_id).filename
+
+        # Invariant check and confidence propagation if nodes remain
+        if self.nodes:
+            self.validate_invariants()
+            self.run_confidence_propagation()
+
+        logger.info(f"Deleted document '{doc_filename}' ({doc_id}) and {len(node_ids_to_remove)} associated concept nodes.")
+        return True
+
+    def run_crosslink_discovery(self, allow_cross_document: bool = False) -> List[KnowledgeEdge]:
         """Runs Layer 5 Cross-Link Discovery to find semantic inter-tree relationships."""
         new_edges = self.cld.discover_crosslinks(
             nodes=self.nodes,
             existing_edges=self.edges,
             embeddings=self.embeddings,
             block_to_nodes=self.block_to_nodes,
+            allow_cross_document=allow_cross_document,
         )
         for edge in new_edges:
             self.edges.append(edge)
@@ -255,7 +357,12 @@ class SHIARAGPipeline:
             raise ValueError(f"Forest invariant violation(s): {violations}")
         logger.info("Forest invariant check PASSED: Acyclic taxonomy DAG maintained.")
 
-    def ingest_pdf(self, pdf_path: str | Path) -> Dict[str, Any]:
+    def ingest_pdf(
+        self,
+        pdf_path: str | Path,
+        clear_existing: bool = False,
+        allow_cross_document: bool = False,
+    ) -> Dict[str, Any]:
         """
         Ingests a real PDF document into Tier 1 TextBlocks, extracts Tier 2 concepts
         and hierarchical relations, integrates them into the Knowledge Forest,
@@ -263,10 +370,15 @@ class SHIARAGPipeline:
 
         Args:
             pdf_path: Filepath to the PDF document.
+            clear_existing: If True, resets existing forest before ingesting to form a fresh standalone tree.
+            allow_cross_document: If False, preserves strict intra-document isolation without linking across PDFs.
 
         Returns:
             Dictionary summarizing ingestion metrics and forest statistics.
         """
+        if clear_existing:
+            self.clear_forest()
+
         path = Path(pdf_path).resolve()
         logger.info(f"Ingesting PDF document: {path}")
         doc_node, blocks = self.pdf_loader.load_pdf(path)
@@ -284,8 +396,8 @@ class SHIARAGPipeline:
         # Layer 4: Topological confidence propagation
         self.run_confidence_propagation()
 
-        # Layer 5: Semantic cross-link discovery
-        new_crosslinks = self.run_crosslink_discovery()
+        # Layer 5: Semantic cross-link discovery (intra-document by default)
+        new_crosslinks = self.run_crosslink_discovery(allow_cross_document=allow_cross_document)
 
         # Forest invariant checking
         self.validate_invariants()
@@ -554,45 +666,346 @@ class SHIARAGPipeline:
     # Layer 6: Retrieval Engine (SRDR + DC-Knapsack)
     # ─────────────────────────────────────────────────────────────
 
-    def _score_node_relevance(self, query: str, node: KnowledgeNode, mode: str) -> float:
-        """Computes query-node relevance based on textual similarity and routing mode."""
-        query_words = set(re.findall(r"\w+", query.lower()))
+    def _get_node_ancestors(self, node_id: str) -> Set[str]:
+        """Returns the set of all ancestor node IDs for a given node in the DAG."""
+        ancestors: Set[str] = set()
+        queue = list(self.forest_parents_map.get(node_id, []))
+        while queue:
+            p = queue.pop(0)
+            if p not in ancestors:
+                ancestors.add(p)
+                queue.extend(self.forest_parents_map.get(p, []))
+        return ancestors
+
+    def _get_node_descendants(self, node_id: str) -> Set[str]:
+        """Returns the set of all descendant node IDs for a given node in the DAG."""
+        descendants: Set[str] = set()
+        queue = list(self.forest_children_map.get(node_id, []))
+        while queue:
+            ch = queue.pop(0)
+            if ch not in descendants:
+                descendants.add(ch)
+                queue.extend(self.forest_children_map.get(ch, []))
+        return descendants
+
+    def is_followup_query(self, query: str) -> bool:
+        """Determines if query is an elaboration or follow-up to prior conversational context."""
+        q_lower = query.lower().strip()
+        followup_phrases = [
+            "more content", "give me more", "tell me more", "explain more", "more details",
+            "more detail", "can you expand", "expand on this", "expand this", "expand further",
+            "elaborate", "explain in detail", "go deeper", "continue", "what else",
+            "more examples", "explain further", "give more", "more info", "more information",
+            "provide more", "in detail", "tell me about it", "how does it work",
+            "what are its", "why does it", "tell more", "more on this", "can you give me more",
+            "give additional", "additional content", "additional details", "elaborate on this",
+            "can you explain more", "can you elaborate"
+        ]
+        if any(p in q_lower for p in followup_phrases):
+            return True
+
         stopwords = {
             "what", "is", "the", "exact", "of", "and", "or", "in", "for", "to",
-            "how", "does", "like", "which", "one", "define", "summarize", "overview",
-            "architecture", "give", "me", "an", "all", "topics", "mechanism"
+            "how", "does", "like", "which", "one", "give", "me", "an", "all",
+            "about", "with", "this", "that", "these", "those", "can", "you",
+            "tell", "explain", "paper", "document", "work", "study", "project",
+            "please", "show", "describe", "detail", "details"
         }
-        meaningful_query_words = {w for w in query_words if w not in stopwords and len(w) > 2}
+        words = set(re.findall(r"\w+", q_lower))
+        meaningful = {w for w in words if w not in stopwords and (len(w) > 2 or w.isdigit())}
+        conversational_modifiers = {
+            "more", "content", "expand", "elaborate", "further", "info", "information",
+            "example", "examples", "deeper", "else", "types", "function", "functions", "additional"
+        }
+        if not meaningful or meaningful <= conversational_modifiers:
+            return True
+        return False
+
+    def resolve_conversational_topic(
+        self,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+    ) -> Tuple[Optional[str], List[str]]:
+        """
+        Extracts the active conversational topic and previously selected node IDs.
+        """
+        # 1. From chat_history if provided
+        if chat_history:
+            for msg in reversed(chat_history):
+                if msg.get("role") == "user":
+                    content = msg.get("content", "").strip()
+                    if content and not self.is_followup_query(content):
+                        return content, self.last_selected_node_ids
+
+        # 2. From pipeline's recorded last_query / last_topic
+        if self.last_query and not self.is_followup_query(self.last_query):
+            return self.last_query, self.last_selected_node_ids
+
+        if self.last_topic:
+            return self.last_topic, self.last_selected_node_ids
+
+        # 3. If previous selected nodes exist, extract their names
+        if self.last_selected_node_ids:
+            names = [
+                self.nodes[nid].canonical_name
+                for nid in self.last_selected_node_ids
+                if nid in self.nodes and self.nodes[nid].depth > 0
+            ]
+            if names:
+                return " ".join(names[:2]), self.last_selected_node_ids
+
+        return None, []
+
+    def _score_node_relevance(
+        self,
+        query: str,
+        node: KnowledgeNode,
+        mode: str,
+        is_followup: bool = False,
+        context_node_ids: Optional[List[str]] = None,
+    ) -> float:
+        """Computes query-node relevance based on textual similarity, domain synonyms, Tier 1 block evidence, and routing mode."""
+        query_lower = query.lower()
+        query_words = set(re.findall(r"\w+", query_lower))
+        stopwords = {
+            "what", "is", "the", "exact", "of", "and", "or", "in", "for", "to",
+            "how", "does", "like", "which", "one", "give", "me", "an", "all",
+            "about", "with", "this", "that", "these", "those", "can", "you",
+            "tell", "explain", "paper", "document", "work", "study", "project",
+            "please", "show", "describe", "detail", "details"
+        }
+        meaningful_query_words = {w for w in query_words if w not in stopwords and (len(w) > 2 or w.isdigit())}
         if not meaningful_query_words:
-            meaningful_query_words = query_words
+            meaningful_query_words = {w for w in query_words if len(w) > 2 or w.isdigit()} or query_words
 
-        # Term frequency match in canonical name, aliases, and definition
-        name_words = {w for w in re.findall(r"\w+", node.canonical_name.lower()) if len(w) > 2}
+        # Universal Morphological Stemming (suffix stripping)
+        def get_stems(words: Set[str]) -> Set[str]:
+            stems = set(words)
+            for w in words:
+                if len(w) > 4:
+                    if w.endswith("ies"): stems.add(w[:-3] + "y")
+                    elif w.endswith("sses"): stems.add(w[:-2])
+                    elif w.endswith("ing"): stems.add(w[:-3])
+                    elif w.endswith("tion") or w.endswith("sion"): stems.add(w[:-4])
+                    elif w.endswith("ed"): stems.add(w[:-2])
+                    elif w.endswith("ment"): stems.add(w[:-4])
+                    elif w.endswith("able"): stems.add(w[:-4])
+                    elif w.endswith("al"): stems.add(w[:-2])
+                    elif w.endswith("s") and not w.endswith("ss"): stems.add(w[:-1])
+            return stems
+
+        expanded_query_words = get_stems(meaningful_query_words)
+
+        # Universal Intent Classification
+        # 1. Heading / Outline queries
+        is_heading_q = any(t in query_words for t in (
+            "heading", "headings", "section", "sections", "outline", "toc",
+            "table of contents", "structure", "subheading", "subheadings", "index"
+        ))
+        if is_heading_q:
+            is_sec_node = (
+                bool(re.match(r"^(?:[1-9]\d*(?:\.\d+)*|[A-H]\.\d+|Appendix\s+[A-H]|SEC-)\b", node.canonical_name))
+                or (node.depth in (1, 2) and not node.canonical_name.endswith("Details") and "Novelties" not in node.canonical_name and "Key Contributions" not in node.canonical_name)
+            )
+            if is_sec_node:
+                return max(0.90, 0.98 - 0.04 * node.depth)
+            else:
+                return 0.05
+
+        # 2. Novelty / Contribution queries
+        is_novelty_q = any(t in query_words for t in (
+            "novelty", "novelties", "novel", "contribution", "contributions", "innovations", "innovation"
+        )) or any(p in query_lower for p in (
+            "what is proposed", "what do they propose", "what is new", "key novelties",
+            "main contributions", "what are the novelties", "list all novelties", "list all the novelties"
+        ))
+
+        # 3. Summary / Overview / Thesis queries
+        is_summary_q = any(t in query_words for t in (
+            "summary", "summarize", "overview", "abstract"
+        )) or any(p in query_lower for p in (
+            "what is this paper", "what is this document", "tell me about",
+            "about this paper", "about the paper", "explain this paper",
+            "explain the paper", "what does this paper do", "what does this document do",
+            "what is the paper about", "what is the document about", "give me detail"
+        ))
+
+        # 4. Method / Architecture queries (only if asking about paper's approach in general)
+        is_method_q = not is_novelty_q and not is_summary_q and (
+            any(p in query_lower for p in (
+                "what is the method", "what is the methodology", "explain the method",
+                "explain the methodology", "proposed method", "proposed architecture",
+                "system architecture", "overall architecture", "how does the method work",
+                "how does the architecture work"
+            ))
+            or (query_words <= {"what", "is", "the", "method", "methodology", "architecture", "framework", "how", "does", "it", "work", "explain"})
+        )
+
+        # 5. Results / Evaluation queries
+        is_eval_q = not is_novelty_q and not is_summary_q and not is_method_q and any(p in query_lower for p in (
+            "what are the results", "experimental results", "evaluation results",
+            "performance results", "benchmark results", "main findings", "what are the findings"
+        ))
+
+        # 6. Conclusion queries
+        is_conclusion_q = not is_novelty_q and not is_summary_q and any(t in query_words for t in (
+            "conclusion", "conclusions", "future", "limitation", "limitations"
+        ))
+
+        if is_novelty_q:
+            expanded_query_words.update([
+                "objective", "objectives", "propose", "proposes", "proposed", "scheme", "schemes",
+                "contribution", "contributions", "novelties", "novelty", "innovations", "innovation",
+                "conclusions", "conclusion", "abstract"
+            ])
+        elif is_summary_q:
+            expanded_query_words.update([
+                "abstract", "introduction", "overview", "proposed", "conclusion", "novelty", "contribution"
+            ])
+        elif is_method_q:
+            expanded_query_words.update([
+                "method", "methodology", "architecture", "mechanism", "algorithm",
+                "pipeline", "framework", "workflow", "process", "procedure", "step", "steps"
+            ])
+        elif is_eval_q:
+            expanded_query_words.update([
+                "result", "results", "performance", "benchmark", "benchmarks",
+                "accuracy", "metrics", "evaluation", "experiment", "experiments", "findings"
+            ])
+
+        # Stemmed term frequency match in canonical name, aliases, definition, evidence, and Tier 1 blocks
+        name_words = get_stems({w for w in re.findall(r"\w+", node.canonical_name.lower()) if len(w) > 2})
         for alias in node.aliases:
-            name_words.update(w for w in re.findall(r"\w+", alias.lower()) if len(w) > 2)
-        def_words = {w for w in re.findall(r"\w+", node.definition_text.lower()) if len(w) > 2}
-        ev_words = {w for w in re.findall(r"\w+", " ".join(node.evidence_texts).lower()) if len(w) > 2}
+            name_words.update(get_stems({w for w in re.findall(r"\w+", alias.lower()) if len(w) > 2}))
+        def_words = get_stems({w for w in re.findall(r"\w+", node.definition_text.lower()) if len(w) > 2})
+        ev_words = get_stems({w for w in re.findall(r"\w+", " ".join(node.evidence_texts).lower()) if len(w) > 2})
 
-        overlap = len(meaningful_query_words & name_words)
-        query_coverage = overlap / max(1, len(meaningful_query_words))
+        overlap = len(expanded_query_words & name_words)
+        query_coverage = overlap / max(1, len(expanded_query_words))
         name_coverage = overlap / max(1, len(name_words))
         name_match = max(query_coverage, name_coverage)
 
         # Check direct substring matching on canonical name and aliases
-        query_lower = query.lower()
-        if node.canonical_name.lower() in query_lower or any(w in node.canonical_name.lower() for w in meaningful_query_words if len(w) > 3):
-            name_match = max(name_match, 0.70)
+        clean_q_phrase = " ".join([w for w in re.findall(r"\w+", query_lower) if w not in stopwords and len(w) > 2])
+        if clean_q_phrase and clean_q_phrase in node.canonical_name.lower():
+            name_match = 1.0
+        elif query_coverage >= 1.0:
+            name_match = max(name_match, 0.95)
+        elif query_coverage >= 0.5:
+            name_match = max(name_match, 0.65)
+        elif node.canonical_name.lower() in query_lower or any(w in node.canonical_name.lower() for w in expanded_query_words if len(w) > 3):
+            name_match = max(name_match, 0.40)
+
         for alias in node.aliases:
-            if alias.lower() in query_lower or any(w in alias.lower() for w in meaningful_query_words if len(w) > 3):
-                name_match = max(name_match, 0.70)
+            if clean_q_phrase and clean_q_phrase in alias.lower():
+                name_match = 1.0
+            elif alias.lower() in query_lower or any(w in alias.lower() for w in expanded_query_words if len(w) > 3):
+                name_match = max(name_match, 0.60)
 
-        def_match = len(meaningful_query_words & def_words) / max(1, len(meaningful_query_words))
-        ev_match = len(meaningful_query_words & ev_words) / max(1, len(meaningful_query_words))
+        # Inherent priority boost for contribution nodes on novelty queries
+        if is_novelty_q and any(a in ("Novelties", "Novelty", "Key Novelties", "Contributions", "Contribution", "Innovations") for a in node.aliases):
+            name_match = max(name_match, 0.95)
 
-        base_relevance = 0.6 * name_match + 0.25 * def_match + 0.15 * ev_match
+        def_match = len(expanded_query_words & def_words) / max(1, len(expanded_query_words))
+        if clean_q_phrase and clean_q_phrase in node.definition_text.lower():
+            def_match = max(def_match, 0.90)
+        ev_match = len(expanded_query_words & ev_words) / max(1, len(expanded_query_words))
 
-        if base_relevance <= 0.02:
+        # Full-text Tier 1 block evidence scoring
+        block_match = 0.0
+        if hasattr(self, "blocks") and node.source_block_ids:
+            for bid in node.source_block_ids:
+                blk = self.blocks.get(bid)
+                if blk:
+                    b_words = get_stems({w for w in re.findall(r"\w+", blk.text_content.lower()) if len(w) > 2})
+                    b_overlap = len(expanded_query_words & b_words)
+                    m = b_overlap / max(1, len(expanded_query_words))
+                    if m > block_match:
+                        block_match = m
+
+        base_relevance = 0.45 * name_match + 0.20 * def_match + 0.15 * ev_match + 0.20 * block_match
+
+        # Contextual boost for multi-turn follow-up queries (e.g. "more content", "expand", "elaborate")
+        if is_followup and context_node_ids:
+            if node.node_id in context_node_ids:
+                base_relevance = max(base_relevance, 0.90)
+            elif node.parent_id in context_node_ids:
+                base_relevance = max(base_relevance, 0.96)
+            elif any(anc in context_node_ids for anc in self._get_node_ancestors(node.node_id)):
+                base_relevance = max(base_relevance, 0.93)
+            elif any(
+                (e.source_id in context_node_ids and e.target_id == node.node_id) or
+                (e.target_id in context_node_ids and e.source_id == node.node_id)
+                for e in self.edges
+            ):
+                base_relevance = max(base_relevance, 0.86)
+
+        # Direct exact match boost: if node definition, name, or evidence matches all numerical query targets
+        num_query_words = {w for w in meaningful_query_words if w.isdigit()}
+        combined_node_text = f"{node.canonical_name} {node.definition_text} {' '.join(node.evidence_texts)}".lower()
+        if num_query_words and all(nw in combined_node_text for nw in num_query_words):
+            base_relevance = max(base_relevance, 0.92)
+        elif meaningful_query_words and len(meaningful_query_words) >= 2 and all(w in combined_node_text for w in meaningful_query_words if len(w) > 3):
+            base_relevance = max(base_relevance, 0.88)
+
+        # Strict isolation for factual needle queries: unrelated nodes must return 0.0
+        if not is_followup and mode == "FACTUAL" and name_match == 0 and def_match < 0.15 and ev_match < 0.15 and block_match < 0.15 and not (num_query_words and any(nw in combined_node_text for nw in num_query_words)):
+            if node.depth == 0 and is_summary_q:
+                return 0.50
             return 0.0
+
+        # Intent-driven adaptive scoring (for THEMATIC, MULTIHOP, PARAMETRIC, summary or novelty queries)
+        if is_novelty_q:
+            c_name_lower = node.canonical_name.lower()
+            if any(w in c_name_lower for w in (
+                "future work", "future", "related work", "limitations", "limitation",
+                "performance analysis", "running time", "memory footprint", "research status", "references"
+            )):
+                return 0.05
+            if node.depth == 0:
+                base_relevance = max(base_relevance, 0.92)
+            elif any(w in c_name_lower for w in ("novelty", "novelties", "contribution", "contributions", "scheme", "proposed", "architecture", "method", "key", "agreement", "security", "initialization", "authentication", "membership")):
+                base_relevance = max(base_relevance, 0.95)
+            elif any(a.lower() in ("novelties", "novelty", "key novelties", "contributions", "contribution", "innovations") for a in node.aliases):
+                base_relevance = max(base_relevance, 0.98)
+            elif node.depth == 1:
+                base_relevance = max(base_relevance, 0.75)
+            elif node.depth == 2:
+                base_relevance = max(base_relevance, 0.55)
+        elif is_summary_q:
+            if node.depth == 0:
+                base_relevance = max(base_relevance, 0.96)
+            elif any(w in node.canonical_name.lower() for w in ("abstract", "introduction", "conclusion", "contribution", "novelties")):
+                base_relevance = max(base_relevance, 0.88)
+            elif node.depth == 1:
+                base_relevance = max(base_relevance, 0.72)
+            elif node.depth == 2:
+                base_relevance = max(base_relevance, 0.50)
+        elif is_method_q and mode != "FACTUAL":
+            if any(w in node.canonical_name.lower() for w in ("method", "architecture", "proposed", "protocol", "scheme", "system", "design", "model", "algorithm")):
+                base_relevance = max(base_relevance, 0.92)
+            elif node.depth == 1 and not any(w in node.canonical_name.lower() for w in ("references", "related")):
+                base_relevance = max(base_relevance, 0.65)
+        elif is_eval_q and mode != "FACTUAL":
+            if any(w in node.canonical_name.lower() for w in ("experiment", "evaluation", "result", "performance", "benchmark", "analysis")):
+                base_relevance = max(base_relevance, 0.92)
+            elif node.depth == 1 and any(w in node.canonical_name.lower() for w in ("result", "experiment")):
+                base_relevance = max(base_relevance, 0.75)
+        elif is_conclusion_q and mode != "FACTUAL":
+            if any(w in node.canonical_name.lower() for w in ("conclusion", "conclusions", "future", "limitation", "discussion")):
+                base_relevance = max(base_relevance, 0.92)
+
+        # Baseline for overview queries: guarantee root and major sections provide grounded context
+        if is_summary_q or is_novelty_q or mode == "THEMATIC":
+            if node.depth == 0:
+                base_relevance = max(base_relevance, 0.60)
+            elif node.depth == 1 and not any(w in node.canonical_name.lower() for w in ("references", "ref")):
+                base_relevance = max(base_relevance, 0.35)
+
+        if base_relevance <= 0.035:
+            return 0.0
+
+        if is_followup and context_node_ids and base_relevance >= 0.85:
+            return base_relevance
 
         # Mode-dependent weighting
         if mode == "THEMATIC":
@@ -603,7 +1016,7 @@ class SHIARAGPipeline:
         elif mode == "FACTUAL":
             # Favor deep, concrete evidence nodes
             relevance = base_relevance * (0.7 + 0.3 * (1.0 - node.abstraction_level))
-            if ev_match > 0.10:
+            if ev_match > 0.10 or block_match > 0.10:
                 relevance += 0.25
         elif mode == "MULTIHOP":
             # Balanced, boosted by confidence
@@ -613,7 +1026,14 @@ class SHIARAGPipeline:
 
         return min(1.0, max(0.0, relevance))
 
-    def retrieve(self, query: str, token_budget: Optional[int] = None) -> RetrievalResult:
+    def retrieve(
+        self,
+        query: str,
+        token_budget: Optional[int] = None,
+        doc_id: Optional[str] = None,
+        is_followup: bool = False,
+        context_node_ids: Optional[List[str]] = None,
+    ) -> RetrievalResult:
         """
         Executes Layer 6 Retrieval:
           1. Routes query via SRDR (THEMATIC, FACTUAL, MULTIHOP, PARAMETRIC).
@@ -640,19 +1060,58 @@ class SHIARAGPipeline:
         self.evolution.sample_edge_weights(self.edge_priors)
 
         # Step 3: Compute candidate relevance and items for DC-Knapsack
+        target_doc_id = doc_id
+        if not target_doc_id and self.documents:
+            is_cross_doc = any(w in query.lower() for w in [
+                "compare", "comparison", "difference between", "both papers", "both documents",
+                "all papers", "all documents", "across documents", "across papers"
+            ])
+            if not is_cross_doc:
+                target_doc_id = list(self.documents.keys())[-1]
+
+        candidate_nodes = self.nodes
+        if target_doc_id:
+            matching = {nid: n for nid, n in self.nodes.items() if getattr(n, "doc_id", None) == target_doc_id}
+            if matching:
+                candidate_nodes = matching
+            else:
+                doc_blocks = {bid for bid, b in self.blocks.items() if b.doc_id == target_doc_id}
+                candidate_nodes = {nid: n for nid, n in self.nodes.items() if any(b in doc_blocks for b in n.source_block_ids)}
+
+        is_heading_q = any(t in re.findall(r"\w+", query.lower()) for t in (
+            "heading", "headings", "section", "sections", "outline", "toc",
+            "table of contents", "structure", "subheading", "subheadings", "index"
+        ))
+        if is_heading_q and effective_budget < 2500:
+            effective_budget = 2500
+        if is_followup and effective_budget < 2500:
+            effective_budget = 2500
+
         knapsack_items: Dict[str, KnapsackItem] = {}
-        for nid, node in self.nodes.items():
-            rel_score = self._score_node_relevance(query, node, mode)
-            # Parent prerequisites
-            parents = self.forest_parents_map.get(nid, [])
+        for nid, node in candidate_nodes.items():
+            rel_score = self._score_node_relevance(
+                query,
+                node,
+                mode,
+                is_followup=is_followup,
+                context_node_ids=context_node_ids,
+            )
+            # Parent prerequisites (scoped to available candidate nodes)
+            parents = [p for p in self.forest_parents_map.get(nid, []) if p in candidate_nodes]
             # Token cost (definition + evidence)
-            cost = max(20, node.token_cost if node.token_cost > 0 else (len(node.definition_text.split()) + 25))
+            if is_heading_q and (
+                bool(re.match(r"^(?:[1-9]\d*(?:\.\d+)*|[A-H]\.\d+|Appendix\s+[A-H]|SEC-)\b", node.canonical_name))
+                or (node.depth in (1, 2) and not node.canonical_name.endswith("Details") and "Novelties" not in node.canonical_name)
+            ):
+                cost = 15
+            else:
+                cost = max(20, node.token_cost if node.token_cost > 0 else (len(node.definition_text.split()) + 25))
 
             knapsack_items[nid] = KnapsackItem(
                 node_id=nid,
                 relevance_score=rel_score,
                 token_cost=cost,
-                parent_ids=list(parents),
+                parent_ids=parents,
             )
 
         # Step 4: Solve DC-Knapsack Optimizer
@@ -689,13 +1148,20 @@ class SHIARAGPipeline:
             total_utility=total_utility,
             traversed_edge_ids=traversed_edge_ids,
             context_text=context_text,
+            doc_id=doc_id,
         )
 
     # ─────────────────────────────────────────────────────────────
     # Layer 7: Generation & Attribution Verification
     # ─────────────────────────────────────────────────────────────
 
-    def generate_and_verify(self, retrieval_result: RetrievalResult) -> GenerationResult:
+    def generate_and_verify(
+        self,
+        retrieval_result: RetrievalResult,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        is_followup: bool = False,
+        original_query: Optional[str] = None,
+    ) -> GenerationResult:
         """
         Executes Layer 7:
           1. Assembles grounded synthesis from retrieved context.
@@ -705,35 +1171,31 @@ class SHIARAGPipeline:
         """
         selected_nodes = {nid: self.nodes[nid] for nid in retrieval_result.selected_node_ids}
 
-        # Synthesize answer using selected nodes with explicit citations
+        # Synthesize answer using selected nodes with explicit citations and pre-verification
         if not selected_nodes:
             answer = "I could not find sufficient grounded evidence in the Knowledge Forest to answer this query."
+            reward = 0.0
+            records = []
+            formatted_answer = answer
         else:
-            answer_parts: List[str] = []
-            for nid, node in selected_nodes.items():
-                clean_def = node.definition_text.rstrip(". ")
-                answer_parts.append(
-                    f"{node.canonical_name} is defined as {clean_def} [{node.node_id}]."
-                )
-            answer = " ".join(answer_parts)
-
-        # Prepare evidence map for verifier: node_id -> {"evidence": list of strings}
-        verifier_node_data = {
-            nid: {
-                "evidence": node.evidence_texts + [node.definition_text],
-                "canonical_name": node.canonical_name,
-            }
-            for nid, node in selected_nodes.items()
-        }
-
-        reward, records = self.verifier.verify_generation(
-            generated_answer=answer,
-            selected_nodes=verifier_node_data,
-        )
+            synth_out = self.synthesizer.synthesize_and_verify(
+                query=retrieval_result.query,
+                retrieval_res=retrieval_result,
+                pipeline_ref=self,
+                scoped_doc_id=getattr(retrieval_result, "doc_id", None),
+                chat_history=chat_history,
+                is_followup=is_followup,
+                original_query=original_query,
+            )
+            answer = synth_out["plain_answer"]
+            formatted_answer = synth_out.get("formatted_answer", answer)
+            reward = synth_out["attribution_reward"]
+            records = synth_out["attribution_records"]
 
         return GenerationResult(
             query=retrieval_result.query,
             answer=answer,
+            formatted_answer=formatted_answer if 'formatted_answer' in locals() else answer,
             attribution_reward=reward,
             attribution_records=records,
             selected_node_ids=retrieval_result.selected_node_ids,
@@ -780,17 +1242,63 @@ class SHIARAGPipeline:
     # Unified End-to-End Execution
     # ─────────────────────────────────────────────────────────────
 
-    def run_query(self, query: str, token_budget: Optional[int] = None) -> Dict[str, Any]:
+    def run_query(
+        self,
+        query: str,
+        token_budget: Optional[int] = None,
+        doc_id: Optional[str] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, Any]:
         """
         Runs the complete SHIA-RAG 2.0 loop for a user query:
-        Retrieve -> Generate & Verify -> Evolve Online.
+        Multi-turn Resolution -> Retrieve -> Generate & Verify -> Evolve Online.
         """
-        retrieval_res = self.retrieve(query, token_budget=token_budget)
-        gen_res = self.generate_and_verify(retrieval_res)
+        is_follow = self.is_followup_query(query)
+        effective_query = query
+        context_node_ids = list(self.last_selected_node_ids)
+
+        if is_follow:
+            resolved_topic, hist_node_ids = self.resolve_conversational_topic(chat_history)
+            if hist_node_ids:
+                context_node_ids = hist_node_ids
+            if resolved_topic:
+                effective_query = f"{resolved_topic} {query} details mechanisms components architecture functions"
+                logger.info(f"Follow-up query '{query}' resolved to context: '{resolved_topic}' (context nodes: {context_node_ids})")
+
+        retrieval_res = self.retrieve(
+            effective_query,
+            token_budget=token_budget,
+            doc_id=doc_id,
+            is_followup=is_follow,
+            context_node_ids=context_node_ids if is_follow else None,
+        )
+        gen_res = self.generate_and_verify(
+            retrieval_res,
+            chat_history=chat_history,
+            is_followup=is_follow,
+            original_query=query,
+        )
         feedback_res = self.feedback_and_evolve(gen_res)
+
+        # Update conversational state
+        if retrieval_res.selected_node_ids:
+            self.last_selected_node_ids = list(retrieval_res.selected_node_ids)
+        if not is_follow:
+            self.last_query = query
+            self.last_topic = query
+
+        self.conversation_history.append({
+            "query": query,
+            "effective_query": effective_query,
+            "is_followup": is_follow,
+            "answer": gen_res.answer,
+            "selected_nodes": retrieval_res.selected_node_ids,
+        })
 
         return {
             "query": query,
+            "effective_query": effective_query,
+            "is_followup": is_follow,
             "routing_mode": retrieval_res.mode,
             "selected_nodes": [
                 {
@@ -803,6 +1311,7 @@ class SHIARAGPipeline:
             ],
             "total_tokens": retrieval_res.total_tokens,
             "answer": gen_res.answer,
+            "formatted_answer": getattr(gen_res, "formatted_answer", None) or gen_res.answer,
             "attribution_reward": gen_res.attribution_reward,
             "attribution_records": gen_res.attribution_records,
             "evolution_update": feedback_res,

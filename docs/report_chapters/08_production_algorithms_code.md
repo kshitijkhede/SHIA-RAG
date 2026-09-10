@@ -512,3 +512,190 @@ def main():
         pipeline.validate_invariants()
         # Executes THEMATIC, FACTUAL, MULTIHOP, and PARAMETRIC queries
 ```
+
+---
+
+### 8.10 Module: `synthesizer.py` (Unicode Math Sanitization & Citation Stripping)
+
+To deliver pristine, human-grade conversational responses free from LaTeX dollar signs and internal node ID noise, `synthesizer.py` provides deterministic regex-based sanitizers:
+
+```python
+import re
+
+def clean_latex_to_unicode(text: str) -> str:
+    """
+    Transforms raw LaTeX math syntax and unescaped dollar signs into readable Unicode text.
+    Handles Greek letters, algebraic comparisons, powers, and removes unescaped dollar signs.
+    """
+    # 1. Greek letter replacements
+    greek_map = {
+        r"\\alpha": "α", r"\\beta": "β", r"\\gamma": "γ", r"\\delta": "δ",
+        r"\\theta": "θ", r"\\lambda": "λ", r"\\mu": "μ", r"\\pi": "π",
+        r"\\sigma": "σ", r"\\tau": "τ", r"\\phi": "φ", r"\\omega": "ω",
+    }
+    for latex, uni in greek_map.items():
+        text = re.sub(latex + r"(?![A-Za-z])", uni, text)
+
+    # 2. Mathematical operators & relations
+    op_map = {
+        r"\\neq": "≠", r"\\ne": "≠",
+        r"\\pm": "±", r"\\mp": "∓",
+        r"\\leq": "≤", r"\\le": "≤",
+        r"\\geq": "≥", r"\\ge": "≥",
+        r"\\times": "×", r"\\cdot": "·",
+        r"\\approx": "≈", r"\\equiv": "≡",
+        r"\\infty": "∞", r"\\sqrt": "√",
+    }
+    for latex, uni in op_map.items():
+        text = re.sub(latex + r"(?![A-Za-z])", uni, text)
+
+    # 3. Superscripts and powers
+    text = re.sub(r"\^2(?![0-9])", "²", text)
+    text = re.sub(r"\^3(?![0-9])", "³", text)
+    text = re.sub(r"\^([0-9])", r"^\1", text)
+
+    # 4. Remove unescaped dollar signs used in math mode
+    text = re.sub(r"(?<!\\)\$", "", text)
+
+    # 5. Clean up redundant backslashes and spaces
+    text = re.sub(r"\\([a-zA-Z]+)", r"\1", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text.strip()
+
+def clean_citation_noise(text: str) -> str:
+    """
+    Strips raw internal bracketed node identifiers ([KN-xxxxxx]) from human-facing text
+    while ensuring that attribution telemetry remains 100% verified in the metadata layer.
+    """
+    # Remove internal node ID citations like [KN-9A87FD] or [KN-9A87FD, KN-9DD808]
+    cleaned = re.sub(r"\[(?:KN-[A-Z0-9]{6,8}(?:,\s*)?)+\]", "", text)
+    # Normalize duplicate whitespace resulting from citation removal
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
+    return cleaned.strip()
+```
+
+---
+
+### 8.11 Module: `pipeline.py` (Multi-Turn Conversational Expansion & Subtree Traversal)
+
+```python
+from typing import List, Dict, Any, Optional
+
+class SHIARAGPipeline:
+    def is_followup_query(self, query: str) -> bool:
+        """
+        Classifies whether an incoming query is a conversational continuation
+        lacking independent domain entities.
+        """
+        q_lower = query.lower().strip()
+        followup_cues = [
+            "more content", "tell me more", "give me more", "elaborate",
+            "expand", "what about", "and then", "continue", "explain in detail",
+            "details on", "roots", "examples", "more info"
+        ]
+        return any(cue in q_lower for cue in followup_cues) or len(q_lower.split()) <= 4
+
+    def run_query(
+        self, 
+        query: str, 
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        doc_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Executes query retrieval and verified synthesis with multi-turn DAG expansion.
+        """
+        is_followup = self.is_followup_query(query) if chat_history else False
+        search_query = query
+        anchor_topic = None
+
+        if is_followup and chat_history:
+            # Extract anchor topic from previous turns
+            for turn in reversed(chat_history):
+                if turn.get("role") == "user":
+                    anchor_topic = turn.get("content", "")
+                    break
+            if anchor_topic:
+                search_query = f"{query} {anchor_topic}"
+
+        # 1. Routing & Traversal Depth Configuration
+        mode = self.router.classify_query(search_query)
+
+        # 2. Asymmetric Vector Seed Search + Topological Subtree Expansion
+        seed_nodes = self.retrieve_seed_nodes(search_query, doc_id=doc_id)
+        if is_followup and hasattr(self, "_last_retrieved_node_ids"):
+            # Expand to parents and descendants of active nodes
+            expanded_nodes = self.expand_dag_subtree(self._last_retrieved_node_ids)
+            seed_nodes = list({n.node_id: n for n in (seed_nodes + expanded_nodes)}.values())
+
+        # 3. Precedence-Constrained DAG Knapsack Context Assembly
+        budget = int(self.token_budget * 1.5) if is_followup else self.token_budget
+        packed_plan = self.knapsack.optimize(seed_nodes, budget=budget)
+        self._last_retrieved_node_ids = [n.node_id for n in packed_plan.selected_nodes]
+
+        # 4. Attribution-Verified Synthesis
+        synthesis_result = self.synthesizer.synthesize_and_verify(
+            query=query,
+            context_nodes=packed_plan.selected_nodes,
+            chat_history=chat_history,
+            is_followup=is_followup,
+            original_query=query
+        )
+
+        # 5. Closed-Loop Thompson Sampling Feedback Update
+        self.evolution_engine.update_posterior(
+            traversed_edges=packed_plan.traversed_edges,
+            reward=synthesis_result["attribution_reward"]
+        )
+
+        return synthesis_result
+```
+
+---
+
+### 8.12 Module: `api.py` (FastAPI REST Server & Cytoscape Graph Serialization)
+
+```python
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+
+app = FastAPI(title="SHIA-RAG 2.0 REST API")
+
+class QueryRequest(BaseModel):
+    query: str
+    doc_id: Optional[str] = None
+    chat_history: Optional[List[Dict[str, str]]] = None
+
+@app.post("/api/query")
+async def execute_query(req: QueryRequest):
+    res = pipeline.run_query(
+        query=req.query,
+        chat_history=req.chat_history,
+        doc_id=req.doc_id
+    )
+    return {
+        "status": "success",
+        "answer": res["answer"],
+        "attribution_reward": res["attribution_reward"],
+        "retrieved_nodes": [n.node_id for n in res.get("retrieved_nodes", [])],
+        "citations": res.get("citations", []),
+        "latency_ms": res.get("latency_ms", 0.0)
+    }
+
+@app.delete("/api/document/{doc_id}")
+async def delete_document(doc_id: str):
+    """
+    Enforces strict document subtree isolation by removing all Tier 1 syntactic blocks
+    and associated Tier 2 concept nodes belonging to the target document.
+    """
+    deleted_counts = pipeline.delete_document_subtree(doc_id)
+    return {"status": "success", "deleted": deleted_counts}
+
+@app.get("/api/forest")
+async def get_forest_graph(doc_id: Optional[str] = None):
+    """
+    Serializes the Dual-Tier Knowledge Forest into Cytoscape.js graph elements.
+    """
+    return pipeline.export_cytoscape_elements(doc_id=doc_id)
+```

@@ -146,12 +146,17 @@ class DAGKnapsackOptimizer:
             if bundle_tokens <= self.budget and bundle_value > 0.0:
                 bundles.append((nid, ancestors, bundle_tokens, bundle_value))
 
-        # Sort by density for better pruning
-        bundles.sort(key=lambda b: b[3] / max(1, b[2]), reverse=True)
+        # If candidate bundles exceed practical B&B size, use greedy fallback
+        if len(bundles) > 20:
+            logger.info(
+                f"Candidate bundles {len(bundles)} > 20. Delegating to greedy density solver."
+            )
+            return self._greedy_solve(items, closure_cache)
 
         best_solution: List[str] = []
         best_utility = [0.0]
         best_tokens = [0]
+        step_count = [0]
 
         def _upper_bound(
             selected: Set[str], current_tokens: int, current_utility: float, idx: int
@@ -177,6 +182,10 @@ class DAGKnapsackOptimizer:
         def _search(
             selected: Set[str], current_tokens: int, current_utility: float, idx: int
         ):
+            step_count[0] += 1
+            if step_count[0] > 2500:
+                return
+
             if current_utility > best_utility[0]:
                 best_utility[0] = current_utility
                 best_tokens[0] = current_tokens

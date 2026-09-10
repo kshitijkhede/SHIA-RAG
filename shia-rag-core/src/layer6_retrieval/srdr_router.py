@@ -311,10 +311,10 @@ class SelfReflectiveDepthRouter:
         Ψ ∈ [0.0, 0.25) → τ = 1 (shallow)
         Ψ ∈ [0.25, 0.50) → τ = 2 (moderate)
         Ψ ∈ [0.50, 0.75) → τ = 3 (deep)
-        Ψ ∈ [0.75, 1.00] → τ = 4 (maximum)
+        Ψ ∈ [0.75, 1.00] → τ = 6 (maximum multi-tier deep traversal)
         """
         if psi_score >= 0.75:
-            return 4
+            return 6
         elif psi_score >= 0.50:
             return 3
         elif psi_score >= 0.25:

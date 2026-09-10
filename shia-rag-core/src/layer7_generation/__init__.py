@@ -1,8 +1,9 @@
 """SHIA-RAG Layer 7: Generation & Claim Attribution Verification"""
 
 from .citation_verifier import ClaimAttributionVerifier
+from .synthesizer import NaturalLanguageSynthesizer
 
 # Alias for backwards compatibility
 CitationVerifier = ClaimAttributionVerifier
 
-__all__ = ["ClaimAttributionVerifier", "CitationVerifier"]
+__all__ = ["ClaimAttributionVerifier", "CitationVerifier", "NaturalLanguageSynthesizer"]

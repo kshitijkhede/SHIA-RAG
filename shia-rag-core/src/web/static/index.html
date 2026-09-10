@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHIA-RAG 2.0 | Dual-Tier Knowledge Forest AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=3">
+</head>
+<body class="dark-theme">
+  <div class="app-layout">
+    <!-- Left Sidebar (Claude / ChatGPT Style) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <span class="brand-title">SHIA-RAG 2.0</span>
+            <span class="brand-badge">Knowledge Forest</span>
+          </div>
+        </div>
+        <button class="icon-btn" id="newChatBtn" title="New Chat (Ctrl+K)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="sidebar-scrollable">
+        <!-- Quick Actions / Upload Dropzone -->
+        <div class="sidebar-section">
+          <div class="section-title">Knowledge Documents</div>
+          <label for="pdfFileInput" class="sidebar-upload-card" id="sidebarUploadTrigger" title="Click to browse and upload any PDF">
+            <div class="upload-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </div>
+            <div class="upload-copy">
+              <span class="upload-text">Upload Any PDF</span>
+              <span class="upload-sub">Extract hierarchy & cross-links</span>
+            </div>
+          </label>
+          <div class="upload-mode-toggle">
+            <label class="mode-checkbox-label" title="When checked, previous trees are cleared to ensure this PDF has an isolated tree">
+              <input type="checkbox" id="freshTreeUploadToggle" checked>
+              <span>Fresh tree (isolated evaluation)</span>
+            </label>
+          </div>
+
+          <!-- Document List -->
+          <div class="document-list" id="documentList">
+            <!-- Dynamically populated via app.js -->
+          </div>
+        </div>
+
+        <!-- Domain Ontologies -->
+        <div class="sidebar-section">
+          <div class="section-title">Preset Ontologies</div>
+          <div class="preset-buttons">
+            <button class="preset-btn" id="loadSampleKbBtn">
+              <span class="preset-dot"></span>
+              <span>Computer Science & AI</span>
+            </button>
+            <button class="preset-btn outline" id="resetForestBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                <path d="M21 3v5h-5"></path>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                <path d="M8 16H3v5"></path>
+              </svg>
+              <span>Reset Knowledge Forest</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Generation Engine / Cloud Acceleration -->
+        <div class="sidebar-section">
+          <div class="section-title">Generation Engine</div>
+          <div class="sidebar-engine-card" id="sidebarEngineCard" title="Configure Cloud LLM Acceleration (Gemini / OpenAI)">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+              <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #f59e0b; display: flex; align-items: center; gap: 4px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                </svg>
+                Engine
+              </span>
+              <span style="font-size: 10.5px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 2px 6px; border-radius: 4px; font-weight: 600;" id="sidebarEngineTypeBadge">Local</span>
+            </div>
+            <div id="sidebarEngineName" style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Local Synthesizer</div>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+              <span id="sidebarEngineStatusDetail">Zero cost offline</span>
+              <span style="color: #f59e0b; font-weight: 600;">Connect ⚡</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Threads -->
+        <div class="sidebar-section">
+          <div class="section-title">Recent Conversations</div>
+          <div class="threads-list" id="threadsList">
+            <!-- Populated via app.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar Footer / Live Forest Health -->
+      <div class="sidebar-footer">
+        <div class="forest-health-card" id="forestHealthCard">
+          <div class="health-header">
+            <div class="health-status">
+              <span class="status-indicator live"></span>
+              <span class="status-label">Forest Online</span>
+            </div>
+            <span class="health-badge" id="sidebarInvariantBadge">DAG [OK]</span>
+          </div>
+          <div class="health-stats-grid">
+            <div class="stat-box">
+              <span class="stat-num" id="statTotalNodes">0</span>
+              <span class="stat-key">Nodes</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-num" id="statTotalEdges">0</span>
+              <span class="stat-key">Edges</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-num" id="statMaxDepth">0</span>
+              <span class="stat-key">Max Depth</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-num" id="statCrosslinks">0</span>
+              <span class="stat-key">Crosslinks</span>
+            </div>
+          </div>
+          <button class="forest-view-btn" id="openForestExplorerBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+            <span>Explore Knowledge Forest</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Canvas -->
+    <main class="main-content">
+      <!-- Top Navigation Header -->
+      <header class="top-nav">
+        <div class="nav-left">
+          <button class="icon-btn mobile-menu-btn" id="toggleSidebarBtn" title="Toggle Sidebar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <div class="active-context-pill" id="activeContextPill">
+            <span class="pulse-dot"></span>
+            <select id="activeDocSelect" class="context-doc-select" title="Switch active document scope for grounded retrieval">
+              <option value="">All Documents (Forest)</option>
+            </select>
+            <span class="context-sep">•</span>
+            <span class="context-model">SHIA-RAG 2.0</span>
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <!-- Token Budget Selector -->
+          <div class="budget-selector">
+            <label for="tokenBudgetSelect">Budget:</label>
+            <select id="tokenBudgetSelect" class="styled-select">
+              <option value="1024">1024 Tokens</option>
+              <option value="2048" selected>2048 Tokens</option>
+              <option value="4096">4096 Tokens</option>
+            </select>
+          </div>
+
+          <!-- Forest Visualizer Button -->
+          <button class="nav-action-btn" id="navForestBtn" title="Visualize Knowledge Forest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Graph View</span>
+          </button>
+
+          <!-- Cloud LLM Acceleration Button -->
+          <button class="nav-action-btn llm-nav-highlight" id="llmConfigBtn" title="Configure Cloud LLM Acceleration (Google Gemini / OpenAI)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+            </svg>
+            <span id="llmEngineBadge">⚡ Cloud LLM</span>
+          </button>
+
+          <!-- Invariants Audit Button -->
+          <button class="nav-action-btn icon-only" id="auditInvariantsBtn" title="Audit Forest Invariants">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Chat Messages Scroll Container -->
+      <div class="chat-container" id="chatContainer">
+        <!-- Welcome Hero Screen (Displayed when conversation is empty) -->
+        <div class="welcome-screen" id="welcomeScreen">
+          <div class="hero-brand-symbol">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <h1 class="hero-title">SHIA-RAG 2.0 Workspace</h1>
+          <p class="hero-subtitle">
+            Upload any research paper or document to automatically induce a <strong>Dual-Tier Heterogeneous Knowledge Forest</strong>, verify citations, and test grounded retrieval.
+          </p>
+
+          <!-- Large Dropzone Card -->
+          <div class="hero-dropzone" id="heroDropzone">
+            <div class="dropzone-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <path d="M12 18v-6"></path>
+                <path d="M9 15l3-3 3 3"></path>
+              </svg>
+            </div>
+            <div class="dropzone-text">
+              <h3>Drop your PDF file here to ingest</h3>
+              <p>Supports research papers, technical specs, manuals, and reports</p>
+            </div>
+            <label for="pdfFileInput" class="dropzone-btn" id="heroUploadBtn" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">Browse PDF File</label>
+            <label class="mode-checkbox-label hero-mode-opt" title="Clears existing documents so this PDF forms a 100% separate, clean tree" onclick="event.stopPropagation()">
+              <input type="checkbox" id="heroFreshTreeToggle" checked>
+              <span>Start fresh with this document (Isolated Tree)</span>
+            </label>
+          </div>
+
+          <!-- Cloud LLM Quick Banner on Hero -->
+          <div class="hero-llm-banner" id="heroLlmBanner">
+            <div style="display: flex; align-items: center; gap: 12px; text-align: left;">
+              <span style="font-size: 20px; line-height: 1;">⚡</span>
+              <div>
+                <div style="font-size: 13px; font-weight: 600; color: #fbbf24;">Cloud LLM Acceleration (Optional)</div>
+                <div style="font-size: 11.5px; color: var(--text-secondary);" id="heroLlmEngineDesc">Active Engine: <strong>Local Synthesizer</strong> (Zero cost). Connect Gemini or OpenAI for frontier natural language generation.</div>
+              </div>
+            </div>
+            <button class="hero-llm-btn" id="heroLlmBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+              </svg>
+              <span>Connect LLM</span>
+            </button>
+          </div>
+
+          <!-- Suggested Starter Prompts -->
+          <div class="starter-prompts-grid" id="starterPromptsGrid">
+            <div class="prompt-card" data-query="Summarize the architecture and overview of Artificial Intelligence and Machine Learning">
+              <div class="prompt-mode-tag thematic">Thematic Overview</div>
+              <div class="prompt-text">"Summarize the architecture and overview of Artificial Intelligence and Machine Learning"</div>
+            </div>
+            <div class="prompt-card" data-query="What is the exact mechanism of Transmission Control Protocol (TCP) flow control?">
+              <div class="prompt-mode-tag factual">Factual Needle</div>
+              <div class="prompt-text">"What is the exact mechanism of Transmission Control Protocol (TCP) flow control?"</div>
+            </div>
+            <div class="prompt-card" data-query="Compare TCP versus UDP in transport protocols, and explain how Transformer architectures utilize optimization algorithms.">
+              <div class="prompt-mode-tag multihop">Multi-Hop Comparison</div>
+              <div class="prompt-text">"Compare TCP versus UDP and how Transformers utilize optimization algorithms"</div>
+            </div>
+            <div class="prompt-card" data-query="Verify the forest health, depth bounds, and acyclicity invariants.">
+              <div class="prompt-mode-tag parametric">Invariant Audit</div>
+              <div class="prompt-text">"Verify the forest health, depth bounds, and acyclicity invariants."</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Stream (Populated dynamically) -->
+        <div class="messages-stream" id="messagesStream"></div>
+      </div>
+
+      <!-- Ingestion Progress Overlay (Appears during PDF ingestion) -->
+      <div class="ingestion-banner" id="ingestionBanner" style="display:none;">
+        <div class="banner-spinner"></div>
+        <div class="banner-content">
+          <div class="banner-title" id="ingestionTitle">Ingesting PDF Document...</div>
+          <div class="banner-sub" id="ingestionSub">Extracting Tier 1 TextBlocks & Inducing Tier 2 Concepts...</div>
+        </div>
+        <div class="banner-progress-bar">
+          <div class="banner-progress-fill" id="bannerProgressFill"></div>
+        </div>
+      </div>
+
+      <!-- Bottom Chat Input Composer (ChatGPT & Claude AI Style) -->
+      <div class="composer-container">
+        <!-- Active Document Scope Pill -->
+        <div id="composerScopeIndicator" class="composer-scope-indicator" style="display:none; font-size:11.5px; color:var(--text-muted); margin-bottom:6px; padding:0 8px; align-items:center; gap:6px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:var(--accent-teal); display:inline-block;"></span>
+          <span id="composerScopeText">Active Document: None</span>
+        </div>
+
+        <div class="composer-card">
+          <!-- Attachment action -->
+          <label for="pdfFileInput" class="composer-action-btn" id="composerAttachBtn" title="Attach PDF file" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+            </svg>
+          </label>
+
+          <!-- Input Textarea -->
+          <textarea
+            id="chatInput"
+            class="composer-textarea"
+            placeholder="Ask anything about the ingested document or knowledge forest... (Enter to send, Shift+Enter for new line)"
+            rows="1"
+          ></textarea>
+
+          <!-- Submit Button -->
+          <button class="composer-send-btn" id="sendMessageBtn" title="Send message">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+          </button>
+        </div>
+
+        <div class="composer-footer-note" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+          <span>SHIA-RAG 2.0 • Verifiable Dual-Tier Hierarchy Induction • Grounded Attribution Verification</span>
+          <div class="composer-engine-indicator" id="composerEngineIndicator" title="Click to configure Cloud LLM Acceleration">
+            <span>⚡ Generation Engine:</span>
+            <strong id="composerEngineBadge" style="color: #fbbf24;">Local Synthesizer</strong>
+            <span style="text-decoration: underline; font-size: 10.5px;">(Change)</span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Slide-Out Node Inspector Drawer (Right Side) -->
+    <aside class="node-inspector-drawer" id="nodeInspectorDrawer">
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <span class="drawer-badge" id="inspectorNodeType">CONCEPT</span>
+          <h2 class="drawer-node-name" id="inspectorNodeName">Transmission Control Protocol</h2>
+          <span class="drawer-node-id" id="inspectorNodeId">KN-TCP01</span>
+        </div>
+        <button class="icon-btn" id="closeInspectorBtn" title="Close Inspector">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        <!-- Metric Pills -->
+        <div class="drawer-metric-grid">
+          <div class="metric-pill">
+            <span class="label">Taxonomy Depth</span>
+            <span class="value" id="inspectorDepth">3</span>
+          </div>
+          <div class="metric-pill">
+            <span class="label">Confidence Score</span>
+            <span class="value accent" id="inspectorConfidence">0.960</span>
+          </div>
+          <div class="metric-pill">
+            <span class="label">Abstraction Level</span>
+            <span class="value" id="inspectorAbstraction">0.20</span>
+          </div>
+          <div class="metric-pill">
+            <span class="label">Token Cost</span>
+            <span class="value" id="inspectorTokens">80 tok</span>
+          </div>
+        </div>
+
+        <!-- Definition Card -->
+        <div class="drawer-section">
+          <div class="drawer-section-title">Concept Definition</div>
+          <div class="drawer-text-box" id="inspectorDefinition">
+            Guarantees reliable, in-order byte stream delivery with dynamic congestion control.
+          </div>
+        </div>
+
+        <!-- Hierarchy Context -->
+        <div class="drawer-section">
+          <div class="drawer-section-title">Taxonomy Hierarchy</div>
+          <div class="hierarchy-card">
+            <div class="hierarchy-row">
+              <span class="hierarchy-tag parent">Parent:</span>
+              <span class="hierarchy-val" id="inspectorParent">Transport Layer (KN-NET02)</span>
+            </div>
+            <div class="hierarchy-row">
+              <span class="hierarchy-tag children">Children:</span>
+              <div class="children-list" id="inspectorChildren">None (Leaf proposition)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Crosslinks -->
+        <div class="drawer-section">
+          <div class="drawer-section-title">Semantic Cross-Links (Layer 5 CLD)</div>
+          <div class="crosslink-list" id="inspectorCrosslinks">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Source Text Blocks (Tier 1 Evidence) -->
+        <div class="drawer-section">
+          <div class="drawer-section-title">Tier 1 Source Text Blocks</div>
+          <div class="evidence-blocks-list" id="inspectorEvidence">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Knowledge Forest Explorer Modal -->
+    <div class="forest-modal-overlay" id="forestModalOverlay" style="display:none;">
+      <div class="forest-modal">
+        <div class="forest-modal-header">
+          <div class="forest-modal-title">
+            <div class="modal-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="5" r="3"></circle>
+                <circle cx="5" cy="19" r="3"></circle>
+                <circle cx="19" cy="19" r="3"></circle>
+                <line x1="12" y1="8" x2="5" y2="16"></line>
+                <line x1="12" y1="8" x2="19" y2="16"></line>
+              </svg>
+            </div>
+            <div>
+              <h2>Dual-Tier Heterogeneous Knowledge Forest Explorer</h2>
+              <p>Visualizing hierarchical DAG branches (solid) & semantic cross-links (dashed)</p>
+            </div>
+          </div>
+          <div class="forest-modal-controls">
+            <input type="text" id="forestSearchInput" class="forest-search" placeholder="Search concept...">
+            <button class="icon-btn" id="closeForestModalBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dedicated Document Tree Tabs -->
+        <div class="forest-doc-tabs" id="forestDocTabs">
+          <!-- Populated dynamically via app.js -->
+        </div>
+
+        <div class="forest-modal-body">
+          <div class="forest-tree-summary-banner" id="forestTreeSummaryBanner" style="display:none;"></div>
+          <div class="forest-graph-container" id="forestGraphContainer">
+            <!-- Forest Tree SVG or HTML rendered dynamically -->
+          </div>
+        </div>
+
+        <div class="forest-modal-footer">
+          <div class="legend-group">
+            <span class="legend-item"><span class="legend-dot root"></span> Document Root</span>
+            <span class="legend-item"><span class="legend-dot concept"></span> High Concept</span>
+            <span class="legend-item"><span class="legend-dot leaf"></span> Leaf Evidence</span>
+            <span class="legend-item"><span class="legend-line solid"></span> Hierarchical Parent</span>
+            <span class="legend-item"><span class="legend-line dashed"></span> Semantic Cross-link</span>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-secondary" id="modalAuditBtn">Verify Invariants</button>
+            <button class="btn-primary" id="modalCloseActionBtn">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cloud LLM Configuration Modal -->
+    <div class="forest-modal-overlay" id="llmModalOverlay" style="display:none;">
+      <div class="forest-modal" style="max-width: 520px;">
+        <div class="forest-modal-header">
+          <div class="forest-modal-title">
+            <div class="modal-icon" style="background: rgba(255, 170, 0, 0.15); color: #f59e0b;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+              </svg>
+            </div>
+            <div>
+              <h2>Cloud LLM Acceleration</h2>
+              <p>Connect Google Gemini or OpenAI for frontier neural generation</p>
+            </div>
+          </div>
+          <button class="icon-btn" id="closeLlmModalBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="forest-modal-body" style="padding: 24px;">
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px;">Current Generation Engine:</div>
+            <div id="llmActiveStatusText" style="font-weight: 600; font-size: 14px; color: var(--accent-primary);">Checking...</div>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Select Provider:</label>
+            <select id="llmProviderSelect" class="styled-select" style="width: 100%;">
+              <option value="gemini">Google Gemini (Gemini 3.6 Flash - Free Tier Available)</option>
+              <option value="openai">OpenAI (GPT-4o-mini)</option>
+            </select>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Enter API Key:</label>
+            <input type="password" id="llmApiKeyInput" class="forest-search" placeholder="AIzaSy... or sk-proj-..." style="width: 100%; box-sizing: border-box;">
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+              Keys are securely stored in your local <code>.env</code> file. Leave empty to use the local semantic engine.
+            </div>
+          </div>
+
+          <!-- Inline Error Message Banner -->
+          <div id="llmModalError" style="display:none; padding: 10px 14px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #fca5a5; font-size: 12px; margin-bottom: 16px; line-height: 1.4;"></div>
+
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button class="btn-secondary" id="cancelLlmBtn">Cancel</button>
+            <button class="btn-primary" id="saveLlmBtn">Save & Connect</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden File Input for Native File Chooser (Accessible to all labels) -->
+    <input
+      type="file"
+      id="pdfFileInput"
+      accept=".pdf,application/pdf"
+      style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px;pointer-events:none;"
+    >
+
+    <!-- Toast Notification Popup -->
+    <div class="toast-container" id="toastContainer"></div>
+  </div>
+
+  <script src="/static/app.js?v=3"></script>
+</body>
+</html>

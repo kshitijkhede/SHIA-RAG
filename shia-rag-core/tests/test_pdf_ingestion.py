@@ -101,7 +101,7 @@ class TestPipelinePDFIngestion:
         assert res["routing_mode"] in ("THEMATIC", "FACTUAL", "MULTIHOP", "PARAMETRIC")
         assert len(res["selected_nodes"]) > 0
         assert res["total_tokens"] <= 2048
-        assert "[" in res["answer"] and "]" in res["answer"]
+        assert len(res["answer"].strip()) > 50
         assert res["attribution_reward"] >= 0.0
         assert res["evolution_update"]["query_count"] >= 1
 

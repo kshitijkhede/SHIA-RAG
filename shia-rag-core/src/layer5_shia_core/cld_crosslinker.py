@@ -94,6 +94,7 @@ class CrossLinkDiscovery:
         existing_edges: List[KnowledgeEdge],
         embeddings: Dict[str, np.ndarray],
         block_to_nodes: Optional[Dict[str, List[str]]] = None,
+        allow_cross_document: bool = False,
     ) -> List[KnowledgeEdge]:
         """
         Main entry point: discovers semantic cross-links across the forest.
@@ -103,6 +104,7 @@ class CrossLinkDiscovery:
             existing_edges: All existing edges (hierarchical + semantic).
             embeddings: Map of node_id → embedding vector.
             block_to_nodes: Map of block_id → list of node_ids extracted from it.
+            allow_cross_document: If False, only links concepts belonging to the same document.
 
         Returns:
             List of new KnowledgeEdge objects (category=SEMANTIC).
@@ -128,6 +130,21 @@ class CrossLinkDiscovery:
         cooccurrence_candidates = self._find_cooccurrence_candidates(
             nodes, block_to_nodes, subtree_roots, existing_pairs
         ) if block_to_nodes else []
+
+        # Enforce intra-document isolation when cross-document linking is disabled
+        if not allow_cross_document:
+            proximity_candidates = [
+                (s, t, sc) for s, t, sc in proximity_candidates
+                if getattr(nodes.get(s), "doc_id", None) is None
+                or getattr(nodes.get(t), "doc_id", None) is None
+                or nodes[s].doc_id == nodes[t].doc_id
+            ]
+            cooccurrence_candidates = [
+                (s, t, sc) for s, t, sc in cooccurrence_candidates
+                if getattr(nodes.get(s), "doc_id", None) is None
+                or getattr(nodes.get(t), "doc_id", None) is None
+                or nodes[s].doc_id == nodes[t].doc_id
+            ]
 
         # Merge and deduplicate candidates
         all_candidates: Dict[Tuple[str, str], float] = {}

@@ -89,3 +89,62 @@ ATTRIBUTED ANSWER + PROVENANCE CITATIONS + ATTRIBUTION REWARD R in {0, 1}
     ▼ Layer 8: Graph Laplacian smoothing propagates rewards to conceptual neighbors
 UPDATED & SELF-EVOLVED KNOWLEDGE FOREST
 ```
+
+---
+
+### 5.4 Full-Stack Web Application & Real-Time Cytoscape Visualization Architecture
+
+To transition SHIA-RAG from an offline research script to a production-grade enterprise platform, the system includes a high-performance **Full-Stack Web Application**:
+
+```mermaid
+graph TD
+    subgraph "Frontend Client (Modern Responsive Single-Page App)"
+        UI["Chat & Query Interface"]
+        Graph["Interactive Cytoscape DAG Visualizer (Dagre Layout)"]
+        Inspector["Live Reasoning & Verification Inspector"]
+        DocManager["Document Library & Upload Manager"]
+    end
+
+    subgraph "FastAPI REST Server (src/api.py)"
+        EP1["POST /api/query (Multi-Turn Chat History)"]
+        EP2["POST /api/upload (Multi-Part File Ingestion)"]
+        EP3["GET /api/forest (Cytoscape JSON Serialization)"]
+        EP4["DELETE /api/document/{doc_id} (Subtree Pruning)"]
+        EP5["POST /api/reset_chat (Conversational Reset)"]
+    end
+
+    subgraph "SHIA-RAG Core Orchestration Pipeline"
+        Pipe["Pipeline Orchestrator (pipeline.py)"]
+        Synthesizer["Synthesizer (synthesizer.py)"]
+        Knapsack["DAG Knapsack (dc_knapsack.py)"]
+    end
+
+    UI --> EP1
+    DocManager --> EP2
+    Graph --> EP3
+    DocManager --> EP4
+    UI --> EP5
+
+    EP1 --> Pipe
+    EP2 --> Pipe
+    EP3 --> Pipe
+    EP4 --> Pipe
+    Pipe --> Knapsack
+    Pipe --> Synthesizer
+```
+
+1. **Interactive Cytoscape Knowledge Forest:**
+   Renders the dual-tier graph dynamically in real time using Cytoscape.js with a hierarchical Dagre layout. Concept nodes are color-coded by abstraction depth (Forest Roots $\to$ Intermediate Concepts $\to$ Evidence Leaves). Directed arrows clearly delineate `HIERARCHICAL` parent-child containment from `SEMANTIC` cross-cutting edges.
+2. **Real-Time Reasoning Inspector:**
+   Displays live execution telemetry for every query:
+   * **Router Mode:** Displays detected operational mode (e.g., `MODE_1_THEMATIC`, `MODE_2_FACTUAL`, `MODE_3_MULTIHOP`).
+   * **Knapsack Token Packing:** Shows exact tokens utilized vs. hard budget ($C \le B$).
+   * **Verification Score:** Reports empirical verification reward ($R \in [0, 1]$) based on token-overlap entailment against source PDF spans.
+   * **Provable Citations:** Displays verified source bounding blocks, page numbers, and character offsets.
+3. **Multi-Document Subtree Isolation & Lifecycle Management:**
+   Users can upload multiple heterogeneous PDFs simultaneously. The UI provides a document selector to scope retrieval strictly to an individual document or across the entire library. A dedicated deletion endpoint (`DELETE /api/document/{doc_id}`) guarantees that removing a document cleanly purges all its Tier 1 syntactic blocks and Tier 2 semantic nodes, preventing cross-document contamination.
+4. **Pluggable Model Acceleration:**
+   The synthesis engine (`synthesizer.py`) features pluggable support for state-of-the-art hosted models:
+   * **Google Gemini Flash (`gemini-2.5-flash` / `gemini-1.5-flash` via `google-genai` SDK):** High-speed streaming synthesis with sub-second latency.
+   * **OpenAI API (`gpt-4o-mini` / `gpt-3.5-turbo`):** Standard external LLM synthesis.
+   * **Deterministic Local Synthesizer:** Fully offline fallback ensuring that the system functions with 100% test passing even in air-gapped environments without external API keys.

@@ -126,6 +126,9 @@ class KnowledgeNode(BaseModel):
     depth: int = Field(default=0, ge=0, description="Depth in the concept forest (0 = root)")
     parent_id: Optional[str] = Field(default=None, description="Hierarchical parent node_id")
     
+    # Document provenance
+    doc_id: Optional[str] = Field(default=None, description="Document ID this concept belongs to")
+
     # Metadata
     aliases: List[str] = Field(default_factory=list, description="Alternative names / abbreviations")
     lsh_fingerprint: Optional[str] = Field(default=None, description="MinHash LSH signature for dedup")
@@ -210,6 +213,7 @@ class RetrievalResult(BaseModel):
     total_utility: float
     traversed_edge_ids: List[str] = Field(default_factory=list)
     context_text: str = Field(default="", description="Assembled context string for LLM prompt")
+    doc_id: Optional[str] = Field(default=None, description="Document ID scope if single document retrieval")
 
 
 class GenerationResult(BaseModel):
@@ -222,3 +226,4 @@ class GenerationResult(BaseModel):
     traversed_edge_ids: List[str]
     total_context_tokens: int
     generation_tokens: int = Field(default=0)
+    formatted_answer: Optional[str] = Field(default=None, description="Rich synthesized output for Web and Chat interfaces")

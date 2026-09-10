@@ -47,7 +47,7 @@ NEGATION_PATTERNS = [
 ]
 
 # Clause splitting delimiters for compound sentence handling (L7.3 fix)
-CLAUSE_DELIMITERS = r'(?:;\s+|\s+and\s+|\s+but\s+|\s+however\s+|\s+whereas\s+|\s+while\s+|\s+although\s+)'
+CLAUSE_DELIMITERS = r'(?:;\s+|\s+and\s+|\s+but\s+|\s+however\s+|\s+whereas\s+|\s+while\s+|\s+although\s+|,\s*(?:it\s+is|which|so|thus|therefore)\b)'
 
 
 class ClaimAttributionVerifier:
@@ -166,6 +166,26 @@ class ClaimAttributionVerifier:
                             # Don't break — continue to check all citations
                             # (a later citation might contradict)
 
+            # Fallback: If claim has no explicit citation or wasn't matched, check against all selected nodes in retrieved context
+            if not is_supported and not is_contradicted and selected_nodes:
+                for s_id, s_data in selected_nodes.items():
+                    ev_list = s_data.get("evidence", [])
+                    s_ev = " ".join([a.get("text", "") if isinstance(a, dict) else str(a) for a in ev_list])
+                    if self._check_contradiction(premise=s_ev, hypothesis=claim_text):
+                        is_contradicted = True
+                        matched_node = s_id
+                        break
+                    elif self._check_entailment(premise=s_ev, hypothesis=claim_text):
+                        is_supported = True
+                        matched_node = s_id
+                        all_checked_nodes.append(s_id)
+                        break
+
+            # Handle conversational/transitional lead-ins (e.g. "Based on grounded analysis...", "Here are the primary...")
+            is_intro = bool(re.search(r"^\s*(?:based\s+on\s+grounded\s+analysis|here\s+(?:is|are)\s+the|in\s+summary|to\s+summarize|the\s+following\s+are)\b", claim_text, re.I))
+            if is_intro and not is_contradicted:
+                is_supported = True
+
             # Contradictions override support
             if is_contradicted:
                 is_supported = False
@@ -204,7 +224,7 @@ class ClaimAttributionVerifier:
         or if the resulting sub-claims are too short to be meaningful.
         """
         parts = re.split(CLAUSE_DELIMITERS, sentence)
-        sub_claims = [p.strip() for p in parts if len(p.strip()) > 10]
+        sub_claims = [p.strip() for p in parts if len(p.strip().split()) >= 3 and len(p.strip()) > 15]
 
         if len(sub_claims) <= 1:
             return [sentence]  # No meaningful split
@@ -216,7 +236,7 @@ class ClaimAttributionVerifier:
         Checks if the premise contradicts the hypothesis (L7.2 fix).
 
         Uses NLI model if available, otherwise falls back to
-        negation-aware lexical heuristic.
+        sentence-localized negation-aware lexical heuristic.
         """
         if self.nli_model is not None:
             try:
@@ -225,27 +245,33 @@ class ClaimAttributionVerifier:
             except Exception as e:
                 logger.warning(f"NLI contradiction check failed, using fallback: {e}")
 
-        # Heuristic: high lexical overlap + negation patterns = likely contradiction
         if not premise or not hypothesis:
             return False
 
-        hypo_words = set(re.findall(r'\w+', hypothesis.lower()))
-        premise_words = set(re.findall(r'\w+', premise.lower()))
-        overlap = len(hypo_words & premise_words) / max(1, len(hypo_words))
+        # Sentence-localized check: find the premise sentence with the highest lexical overlap
+        premise_sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', premise) if len(s.strip()) > 5]
+        if not premise_sents:
+            premise_sents = [premise]
 
-        # Check negation patterns in hypothesis that aren't in premise (or vice versa)
-        hypo_negations = sum(
-            1 for pattern in NEGATION_PATTERNS
-            if re.search(pattern, hypothesis.lower())
-        )
-        premise_negations = sum(
-            1 for pattern in NEGATION_PATTERNS
-            if re.search(pattern, premise.lower())
-        )
+        clean_hypo = re.sub(r'\[KN-[A-Za-z0-9_\-]+\]', '', hypothesis)
+        hypo_words = set(re.findall(r'\w+', clean_hypo.lower()))
+        best_sent = ""
+        best_overlap = 0.0
+        for sent in premise_sents:
+            sent_words = set(re.findall(r'\w+', sent.lower()))
+            ov = len(hypo_words & sent_words) / max(1, len(hypo_words))
+            if ov > best_overlap:
+                best_overlap = ov
+                best_sent = sent
 
-        # Contradiction heuristic: high overlap + different negation polarity
-        negation_mismatch = abs(hypo_negations - premise_negations) > 0
-        return overlap >= self.overlap_threshold and negation_mismatch
+        if best_overlap < self.overlap_threshold:
+            return False
+
+        # Compare negation patterns strictly within the matched proposition window
+        hypo_neg = any(bool(re.search(p, hypothesis.lower())) for p in NEGATION_PATTERNS)
+        premise_neg = any(bool(re.search(p, best_sent.lower())) for p in NEGATION_PATTERNS)
+
+        return hypo_neg != premise_neg and best_overlap >= self.overlap_threshold
 
     def _check_entailment(self, premise: str, hypothesis: str) -> bool:
         """
@@ -266,7 +292,28 @@ class ClaimAttributionVerifier:
         # Lexical overlap fallback
         if not premise:
             return False
-        hypo_words = set(re.findall(r'\w+', hypothesis.lower()))
+        clean_hypo = re.sub(r'\[KN-[A-Za-z0-9_\-]+\]', '', hypothesis)
+        hypo_words = set(re.findall(r'\w+', clean_hypo.lower()))
         premise_words = set(re.findall(r'\w+', premise.lower()))
-        overlap = len(hypo_words & premise_words) / max(1, len(hypo_words))
-        return overlap >= self.overlap_threshold
+        stopwords = {
+            "the", "a", "an", "is", "are", "was", "were", "of", "and", "in", "to", "for",
+            "that", "this", "it", "with", "as", "by", "on", "at", "be", "because", "also", "from",
+            "when", "what", "how", "why", "where", "who", "which", "will", "can", "could", "would", "should",
+            "if", "then", "there", "their", "so", "such", "than", "up", "out", "into"
+        }
+        hypo_content = hypo_words - stopwords or hypo_words
+        premise_content = premise_words - stopwords or premise_words
+
+        def _word_matches(w1: str, w2: str) -> bool:
+            if w1 == w2:
+                return True
+            if min(len(w1), len(w2)) >= 4 and (
+                w1.startswith(w2) or w2.startswith(w1) or
+                (w1[:4] == w2[:4] and abs(len(w1) - len(w2)) <= 4)
+            ):
+                return True
+            return False
+
+        matched = {hw for hw in hypo_content if any(_word_matches(hw, pw) for pw in premise_content)}
+        overlap = len(matched) / max(1, len(hypo_content))
+        return overlap >= min(0.30, self.overlap_threshold)
