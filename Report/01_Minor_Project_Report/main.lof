@@ -1,0 +1,11 @@
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Processing pipeline from a PDF to a validated concept hierarchy.}}{6}{figure.caption.8}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces Dual-tier data model. Tier~2 concepts are grounded in Tier~1 blocks by an explicit link to their bounding-box evidence.}}{7}{figure.caption.9}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Naive reading interleaves the two columns; column-aware sorting reads the left column fully before the right column.}}{8}{figure.caption.10}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Hierarchy induction: candidate generation, parent ranking, and validation.}}{9}{figure.caption.11}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Mean reading-order monotonicity across the eleven-document corpus.}}{13}{figure.caption.14}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces Parent Assignment Accuracy by method. Numbering is the strongest signal; PRE is used as a fallback for unnumbered headings.}}{14}{figure.caption.16}%
+\addvspace {10\p@ }

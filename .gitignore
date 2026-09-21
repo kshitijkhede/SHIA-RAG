@@ -27,3 +27,11 @@ build/
 # OS files
 .DS_Store
 Thumbs.db
+
+# --- Do NOT publish third-party copyrighted papers ---
+research_papers/
+New Paper/
+*.env.local
+secrets.*
+*api_key*
+*API_KEY*

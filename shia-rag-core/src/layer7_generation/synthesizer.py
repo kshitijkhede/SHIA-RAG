@@ -393,7 +393,7 @@ class NaturalLanguageSynthesizer:
             )
 
         # Build Grounded Primary Evidence Excerpts
-        evidence_md = self._build_grounded_excerpts(node_objs)
+        _ = self._build_grounded_excerpts(node_objs)
 
         # Build Verifier Evidence Map
         verifier_node_data = {
@@ -459,14 +459,6 @@ class NaturalLanguageSynthesizer:
         # Categorize nodes
         concl_nodes = [n for n in node_objs if "conclusion" in n.canonical_name.lower()]
         intro_nodes = [n for n in node_objs if "introduction" in n.canonical_name.lower() or "related work" in n.canonical_name.lower()]
-        method_nodes = [
-            n for n in node_objs
-            if any(w in n.canonical_name.lower() for w in ["method", "paradigm", "architecture", "framework", "appendix a", "appendix b", "appendix c"])
-        ]
-        eval_nodes = [
-            n for n in node_objs
-            if any(w in n.canonical_name.lower() for w in ["result", "experiment", "dataset", "setup", "discussion"])
-        ]
 
         raw_claims: List[str] = []
 
@@ -566,16 +558,16 @@ class NaturalLanguageSynthesizer:
 
         if paradigm_items:
             sections.append(
-                f"#### ⚡ Core Architectural Paradigms & Technical Mechanisms\n\n"
-                f"The authors evaluate distinct retrieval philosophies implemented within a unified orchestration framework:\n\n"
+                "#### ⚡ Core Architectural Paradigms & Technical Mechanisms\n\n"
+                "The authors evaluate distinct retrieval philosophies implemented within a unified orchestration framework:\n\n"
                 + "\n".join(paradigm_items)
                 + "\n\n"
             )
 
         if finding_items:
             sections.append(
-                f"#### 📊 Key Empirical Findings & Benchmarks\n\n"
-                f"Evaluation across frontier generator LLMs on the benchmark validation set demonstrated several pivotal conclusions:\n\n"
+                "#### 📊 Key Empirical Findings & Benchmarks\n\n"
+                "Evaluation across frontier generator LLMs on the benchmark validation set demonstrated several pivotal conclusions:\n\n"
                 + "\n".join(finding_items)
                 + "\n\n"
             )
@@ -841,7 +833,7 @@ class NaturalLanguageSynthesizer:
         sections = [
             f"### 📊 Empirical Results & Performance Benchmarks: **\"{doc_title}\"**\n\n"
             f"*Evaluation Route: {mode} • Grounded in {len(eval_nodes)} experimental sections*\n\n",
-            f"Here is the synthesized breakdown of the experimental evaluations and empirical findings:\n\n"
+            "Here is the synthesized breakdown of the experimental evaluations and empirical findings:\n\n"
             + "\n".join(eval_blocks)
         ]
 
@@ -907,13 +899,13 @@ class NaturalLanguageSynthesizer:
 
         # Clarification section to prevent confusing RAGAS or related work
         clarification = (
-            f"#### 🔍 Verification of Mentioned Datasets & Frameworks\n\n"
-            f"1. **Is HotpotQA the only dataset used for experiments in this paper?**\n"
-            f"   - **YES**. HotpotQA is the sole benchmark dataset upon which Native RAG, Self-RAG, and Adaptive RAG were tested across GPT-4o, Gemini 1.5 Pro, and Claude 3 Sonnet.\n\n"
-            f"2. **Is RAGAS a dataset?**\n"
-            f"   - **NO**. RAGAS (Es et al. [7]) is an *automated reference-free evaluation framework* that measures generation Faithfulness and Answer Relevance using an LLM judge; it is not a dataset" + (f" [{ragas_node.node_id}]." if ragas_node else ".\n\n") + "\n\n"
-            f"3. **What about SQuAD, NaturalQuestions, PopQA, TriviaQA, or MuSiQue?**\n"
-            f"   - These datasets are cited strictly in **Section II (Related Work)** to document prior evaluations in the literature. They were **not** used for the experiments conducted in this study.\n"
+            "#### 🔍 Verification of Mentioned Datasets & Frameworks\n\n"
+            "1. **Is HotpotQA the only dataset used for experiments in this paper?**\n"
+            "   - **YES**. HotpotQA is the sole benchmark dataset upon which Native RAG, Self-RAG, and Adaptive RAG were tested across GPT-4o, Gemini 1.5 Pro, and Claude 3 Sonnet.\n\n"
+            "2. **Is RAGAS a dataset?**\n"
+            "   - **NO**. RAGAS (Es et al. [7]) is an *automated reference-free evaluation framework* that measures generation Faithfulness and Answer Relevance using an LLM judge; it is not a dataset" + (f" [{ragas_node.node_id}]." if ragas_node else ".\n\n") + "\n\n"
+            "3. **What about SQuAD, NaturalQuestions, PopQA, TriviaQA, or MuSiQue?**\n"
+            "   - These datasets are cited strictly in **Section II (Related Work)** to document prior evaluations in the literature. They were **not** used for the experiments conducted in this study.\n"
         )
         sections.append(clarification)
         if ragas_node:
@@ -986,9 +978,9 @@ class NaturalLanguageSynthesizer:
         )
         if is_followup:
             system_instruction += (
-                f"- The user has requested more content or elaboration on this subject. "
-                f"Provide a comprehensive, expanded explanation covering key components, sub-mechanisms, "
-                f"workflows, and concrete details from the provided evidence.\n"
+                "- The user has requested more content or elaboration on this subject. "
+                "Provide a comprehensive, expanded explanation covering key components, sub-mechanisms, "
+                "workflows, and concrete details from the provided evidence.\n"
             )
             user_content = (
                 f"User Follow-up Request: {original_query or query}\n"

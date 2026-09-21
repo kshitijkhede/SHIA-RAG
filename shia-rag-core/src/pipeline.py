@@ -21,7 +21,7 @@ import logging
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 import numpy as np
 
@@ -782,15 +782,24 @@ class SHIARAGPipeline:
             stems = set(words)
             for w in words:
                 if len(w) > 4:
-                    if w.endswith("ies"): stems.add(w[:-3] + "y")
-                    elif w.endswith("sses"): stems.add(w[:-2])
-                    elif w.endswith("ing"): stems.add(w[:-3])
-                    elif w.endswith("tion") or w.endswith("sion"): stems.add(w[:-4])
-                    elif w.endswith("ed"): stems.add(w[:-2])
-                    elif w.endswith("ment"): stems.add(w[:-4])
-                    elif w.endswith("able"): stems.add(w[:-4])
-                    elif w.endswith("al"): stems.add(w[:-2])
-                    elif w.endswith("s") and not w.endswith("ss"): stems.add(w[:-1])
+                    if w.endswith("ies"):
+                        stems.add(w[:-3] + "y")
+                    elif w.endswith("sses"):
+                        stems.add(w[:-2])
+                    elif w.endswith("ing"):
+                        stems.add(w[:-3])
+                    elif w.endswith("tion") or w.endswith("sion"):
+                        stems.add(w[:-4])
+                    elif w.endswith("ed"):
+                        stems.add(w[:-2])
+                    elif w.endswith("ment"):
+                        stems.add(w[:-4])
+                    elif w.endswith("able"):
+                        stems.add(w[:-4])
+                    elif w.endswith("al"):
+                        stems.add(w[:-2])
+                    elif w.endswith("s") and not w.endswith("ss"):
+                        stems.add(w[:-1])
             return stems
 
         expanded_query_words = get_stems(meaningful_query_words)
@@ -1149,6 +1158,166 @@ class SHIARAGPipeline:
             traversed_edge_ids=traversed_edge_ids,
             context_text=context_text,
             doc_id=doc_id,
+        )
+
+    def retrieve_leaf_anchored(
+        self,
+        query: str,
+        token_budget: Optional[int] = None,
+        doc_id: Optional[str] = None,
+        anchor_fraction: float = 0.6,
+        neighbor_window: int = 1,
+    ) -> RetrievalResult:
+        """
+        Leaf-anchored precedence retrieval (SHIA-RAG v2 retrieval engine).
+
+        Motivation. The default ``retrieve`` scores *concept nodes* by matching the
+        query against each node's canonical name / definition. That is excellent for
+        structural queries ("list the sections", "what are the novelties") but blind
+        to specific factual questions ("which dataset was used?"), because the answer
+        lives inside a block's full text, not in the node's short name — so the right
+        passage is never selected. This engine fixes that and adds two retrieval
+        strengths on top of SHIA-RAG's structural tree:
+
+          1. LEAF MATCHING — score every source *block* directly against the query
+             (TF-IDF cosine) and take the most relevant blocks as anchors. This is
+             the mechanism that makes flat / HiChunk-style retrievers find answers.
+          2. LOCAL CONTEXT — also pull each anchor's immediate reading-order
+             neighbours (± ``neighbor_window`` blocks), because an answer frequently
+             spans adjacent paragraphs; retrieving only the single best block clips it.
+          3. STRUCTURAL PRECEDENCE — attach each anchor's ancestor-section blocks via
+             the forest parent map, giving the reader the section framing that only a
+             document-tree method (SHIA-RAG) can supply.
+
+        Everything is packed to ``token_budget`` with anchors prioritised, then
+        emitted in document reading order. Returns a standard ``RetrievalResult`` so
+        the rest of the pipeline / evaluation harness is unchanged.
+        """
+        import math
+        from collections import Counter
+
+        budget = token_budget or self.token_budget or 400
+
+        target_doc_id = doc_id
+        if not target_doc_id and self.documents:
+            target_doc_id = list(self.documents.keys())[-1]
+
+        blocks = [
+            b for b in self.blocks.values()
+            if (not target_doc_id or getattr(b, "doc_id", None) == target_doc_id)
+        ]
+        if not blocks:
+            return self.retrieve(query, token_budget=budget, doc_id=doc_id)
+
+        bid2idx = {b.block_id: i for i, b in enumerate(blocks)}
+        by_order: Dict[int, int] = {b.reading_order: i for i, b in enumerate(blocks)}
+
+        # reverse map: block_id -> owning concept node(s)
+        block2nodes: Dict[str, List[str]] = {}
+        for nid, n in self.nodes.items():
+            for bid in n.source_block_ids:
+                if bid in bid2idx:
+                    block2nodes.setdefault(bid, []).append(nid)
+
+        # ---- TF-IDF cosine of each block against the query (dependency-free) ----
+        def toks(t: str) -> List[str]:
+            return [w for w in re.findall(r"[a-z0-9]+", t.lower()) if len(w) > 1]
+
+        blk_tokens = [toks(b.text_content) for b in blocks]
+        df: Counter = Counter()
+        for tk in blk_tokens:
+            for w in set(tk):
+                df[w] += 1
+        N = len(blocks)
+        idf = {w: math.log((N + 1) / (df[w] + 1)) + 1.0 for w in df}
+
+        def vec(tokens: List[str]) -> Dict[str, float]:
+            c = Counter(tokens)
+            denom = max(1, len(tokens))
+            return {w: (c[w] / denom) * idf.get(w, 0.0) for w in c}
+
+        qv = vec(toks(query))
+        qn = math.sqrt(sum(v * v for v in qv.values())) or 1.0
+
+        def cos(dv: Dict[str, float]) -> float:
+            dn = math.sqrt(sum(v * v for v in dv.values())) or 1.0
+            return sum(qv.get(w, 0.0) * v for w, v in dv.items()) / (qn * dn)
+
+        scores = [cos(vec(tk)) for tk in blk_tokens]
+        order = sorted(range(N), key=lambda i: -scores[i])
+
+        # ---- block-level budgeted selection (words) ----
+        def bwords(i: int) -> int:
+            return len(blocks[i].text_content.split())
+
+        chosen: List[int] = []
+        chosen_set: Set[int] = set()
+        used = {"w": 0}
+
+        def add_block(i: int, cap: int) -> bool:
+            if i in chosen_set:
+                return False
+            if chosen_set and used["w"] + bwords(i) > cap:
+                return False
+            chosen_set.add(i)
+            chosen.append(i)
+            used["w"] += bwords(i)
+            return True
+
+        # 1) anchors — most query-relevant blocks
+        anchor_cap = max(1, int(budget * anchor_fraction))
+        anchors: List[int] = []
+        for i in order:
+            if used["w"] >= anchor_cap:
+                break
+            if scores[i] <= 0 and anchors:
+                break
+            if add_block(i, anchor_cap):
+                anchors.append(i)
+        if not anchors and order:                       # guarantee at least one
+            add_block(order[0], budget); anchors.append(order[0])
+
+        # 2) local neighbours (answers span adjacent paragraphs)
+        for i in list(anchors):
+            ro = blocks[i].reading_order
+            for d in range(1, neighbor_window + 1):
+                for nb in (ro - d, ro + d):
+                    j = by_order.get(nb)
+                    if j is not None:
+                        add_block(j, budget)
+
+        # 3) structural precedence — ancestor-section blocks of each anchor
+        for i in list(anchors):
+            for nid in block2nodes.get(blocks[i].block_id, []):
+                for anc in self._get_node_ancestors(nid):
+                    an = self.nodes.get(anc)
+                    if not an:
+                        continue
+                    for bid in an.source_block_ids:
+                        j = bid2idx.get(bid)
+                        if j is not None:
+                            add_block(j, budget)
+
+        # map chosen blocks -> representative nodes, in reading order
+        node_ids: List[str] = []
+        seen_nodes: Set[str] = set()
+        for i in sorted(chosen_set, key=lambda k: blocks[k].reading_order):
+            reps = block2nodes.get(blocks[i].block_id)
+            nid = reps[0] if reps else None
+            if nid and nid not in seen_nodes:
+                seen_nodes.add(nid)
+                node_ids.append(nid)
+
+        self.last_selected_node_ids = list(node_ids)
+        return RetrievalResult(
+            query=query,
+            mode="LEAF_ANCHORED",
+            selected_node_ids=list(node_ids),
+            total_tokens=used["w"],
+            total_utility=float(sum(scores[i] for i in anchors)),
+            traversed_edge_ids=[],
+            context_text="",
+            doc_id=target_doc_id,
         )
 
     # ─────────────────────────────────────────────────────────────

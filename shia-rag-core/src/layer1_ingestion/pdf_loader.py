@@ -107,9 +107,8 @@ class PDFLoader:
                             t_len = len(span.get("text", "").strip())
                             if t_len > 0:
                                 font_counts[sz] = font_counts.get(sz, 0) + t_len
-        body_font_size = 10.0
         if font_counts:
-            body_font_size = max(font_counts.items(), key=lambda x: x[1])[0]
+            _ = max(font_counts.items(), key=lambda x: x[1])[0]
 
         blocks: List[TextBlock] = []
         global_reading_order = 1
@@ -134,7 +133,7 @@ class PDFLoader:
                     continue
 
                 # Split raw block if an interior line contains a section heading (e.g. 5.5.1 Finding square roots)
-                raw_lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
+                raw_lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
                 sub_chunks: List[str] = []
                 curr_lines: List[str] = []
                 for line in raw_lines:
@@ -170,7 +169,7 @@ class PDFLoader:
                     text = re.sub(r"\s+", " ", text)
 
                     # Check if this block or its first line is a section heading
-                    raw_sub_lines = [l.strip() for l in sub_text.split("\n") if l.strip()]
+                    raw_sub_lines = [line.strip() for line in sub_text.split("\n") if line.strip()]
                     first_line = re.sub(r"\s+", " ", raw_sub_lines[0]).strip() if raw_sub_lines else ""
                     clean_heading = text.strip()
 

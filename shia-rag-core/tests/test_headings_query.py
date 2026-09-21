@@ -1,4 +1,3 @@
-import pytest
 from src.pipeline import SHIARAGPipeline
 from src.api import _format_natural_grounded_answer
 

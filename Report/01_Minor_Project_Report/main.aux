@@ -1,0 +1,135 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {chapter}{LIST OF FIGURES}{iv}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{LIST OF TABLES}{v}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{ABBREVIATIONS}{vi}{section*.6}\protected@file@percent }
+\citation{lewis2020rag}
+\citation{guu2020realm}
+\citation{borgeaud2022retro}
+\citation{izacard2023atlas}
+\@writefile{toc}{\contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.1}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {1.1}Background}{1}{section.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.2}The Problem with Flat Chunking}{1}{section.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.3}Motivation}{1}{section.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.4}Scope and Contributions}{2}{section.1.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.5}Organisation of the Report}{2}{section.1.5}\protected@file@percent }
+\citation{lewis2020rag}
+\citation{guu2020realm}
+\citation{borgeaud2022retro}
+\citation{asai2024selfrag}
+\citation{sarthi2024raptor}
+\citation{tao2025treerag}
+\citation{lu2026hichunk}
+\citation{edge2024graphrag}
+\citation{huang2022layoutlmv3}
+\citation{lewis2020rag}
+\citation{guu2020realm}
+\citation{borgeaud2022retro}
+\citation{izacard2023atlas}
+\citation{asai2024selfrag}
+\@writefile{toc}{\contentsline {chapter}{\numberline {2}Literature Review}{3}{chapter.2}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{lot}{\contentsline {table}{\numberline {2.1}{\ignorespaces Summary of the literature survey for the most relevant related works.}}{3}{table.caption.7}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{tab:litsurvey}{{2.1}{3}{Summary of the literature survey for the most relevant related works}{table.caption.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2.1}Retrieval-Augmented Generation}{3}{section.2.1}\protected@file@percent }
+\citation{sarthi2024raptor}
+\citation{tao2025treerag}
+\citation{lu2026hichunk}
+\citation{fatehkia2024trag}
+\citation{edge2024graphrag}
+\citation{ogorman1993document}
+\citation{breuel2002high}
+\citation{huang2022layoutlmv3}
+\@writefile{toc}{\contentsline {section}{\numberline {2.2}Adaptive Retrieval}{4}{section.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.3}Tree-Structured Retrieval}{4}{section.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.4}Graph-Based Retrieval}{4}{section.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.5}Document Layout Analysis}{4}{section.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.6}Outcome of Literature Review}{4}{section.2.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.7}Problem Statement}{5}{section.2.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.8}Objectives}{5}{section.2.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.9}Summary}{5}{section.2.9}\protected@file@percent }
+\citation{huang2022layoutlmv3}
+\citation{ogorman1993document}
+\citation{breuel2002high}
+\@writefile{toc}{\contentsline {chapter}{\numberline {3}Methodology}{6}{chapter.3}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {3.1}Overview}{6}{section.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3.1}{\ignorespaces Processing pipeline from a PDF to a validated concept hierarchy.}}{6}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:pipeline}{{3.1}{6}{Processing pipeline from a PDF to a validated concept hierarchy}{figure.caption.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.2}Data Model}{6}{section.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.3}Layout-Aware Ingestion}{6}{section.3.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3.2}{\ignorespaces Dual-tier data model. Tier~2 concepts are grounded in Tier~1 blocks by an explicit link to their bounding-box evidence.}}{7}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:dualtier}{{3.2}{7}{Dual-tier data model. Tier~2 concepts are grounded in Tier~1 blocks by an explicit link to their bounding-box evidence}{figure.caption.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.4}Reading-Order Recovery}{7}{section.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.5}Heading Classification and Concept Extraction}{7}{section.3.5}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3.3}{\ignorespaces Naive reading interleaves the two columns; column-aware sorting reads the left column fully before the right column.}}{8}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:reading}{{3.3}{8}{Naive reading interleaves the two columns; column-aware sorting reads the left column fully before the right column}{figure.caption.10}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Column-Aware 2D Reading-Order Sorting}}{8}{algorithm.1}\protected@file@percent }
+\newlabel{alg:reading}{{1}{8}{Column-Aware 2D Reading-Order Sorting}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.6}Hierarchy Induction}{9}{section.3.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3.4}{\ignorespaces Hierarchy induction: candidate generation, parent ranking, and validation.}}{9}{figure.caption.11}\protected@file@percent }
+\newlabel{fig:hier}{{3.4}{9}{Hierarchy induction: candidate generation, parent ranking, and validation}{figure.caption.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6.1}Candidate Parent Generation (CPG++)}{9}{subsection.3.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6.2}Parent Ranking Engine (PRE)}{9}{subsection.3.6.2}\protected@file@percent }
+\newlabel{eq:pre}{{3.2}{9}{Parent Ranking Engine (PRE)}{equation.3.6.2}{}}
+\citation{salton1983introduction}
+\citation{kahn1962topological}
+\@writefile{toc}{\contentsline {section}{\numberline {3.7}Structural Validation}{10}{section.3.7}\protected@file@percent }
+\newlabel{sec:invariants}{{3.7}{10}{Structural Validation}{section.3.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.8}Confidence Estimation}{10}{section.3.8}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Upward DFS Cycle and Depth Check}}{11}{algorithm.2}\protected@file@percent }
+\newlabel{alg:dfs}{{2}{11}{Upward DFS Cycle and Depth Check}{algorithm.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.9}Summary}{11}{section.3.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {4}Work Done}{12}{chapter.4}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {4.1}Implementation}{12}{section.4.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.1}{\ignorespaces Implementation components.}}{12}{table.caption.12}\protected@file@percent }
+\newlabel{tab:stack}{{4.1}{12}{Implementation components}{table.caption.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.2}Experimental Setup}{12}{section.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.3}Reading-Order Results}{13}{section.4.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.2}{\ignorespaces Reading-order inversion rate (\%) per document: naive vs.\ column-aware.}}{13}{table.caption.13}\protected@file@percent }
+\newlabel{tab:reading}{{4.2}{13}{Reading-order inversion rate (\%) per document: naive vs.\ column-aware}{table.caption.13}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces Mean reading-order monotonicity across the eleven-document corpus.}}{13}{figure.caption.14}\protected@file@percent }
+\newlabel{fig:romchart}{{4.1}{13}{Mean reading-order monotonicity across the eleven-document corpus}{figure.caption.14}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.4}Hierarchy Results}{14}{section.4.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.3}{\ignorespaces Parent Assignment Accuracy over 196 numbered sections in the corpus.}}{14}{table.caption.15}\protected@file@percent }
+\newlabel{tab:paa}{{4.3}{14}{Parent Assignment Accuracy over 196 numbered sections in the corpus}{table.caption.15}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.2}{\ignorespaces Parent Assignment Accuracy by method. Numbering is the strongest signal; PRE is used as a fallback for unnumbered headings.}}{14}{figure.caption.16}\protected@file@percent }
+\newlabel{fig:paachart}{{4.2}{14}{Parent Assignment Accuracy by method. Numbering is the strongest signal; PRE is used as a fallback for unnumbered headings}{figure.caption.16}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.5}Case Study: TreeRAG Paper}{15}{section.4.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.4}{\ignorespaces Full run on the TreeRAG paper.}}{15}{table.caption.17}\protected@file@percent }
+\newlabel{tab:case}{{4.4}{15}{Full run on the TreeRAG paper}{table.caption.17}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.6}Summary}{15}{section.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {5}Conclusions and Future Work}{16}{chapter.5}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {5.1}Conclusions}{16}{section.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.2}Limitations}{16}{section.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.3}Future Work}{16}{section.5.3}\protected@file@percent }
+\bibcite{lewis2020rag}{1}
+\bibcite{guu2020realm}{2}
+\bibcite{borgeaud2022retro}{3}
+\bibcite{izacard2023atlas}{4}
+\bibcite{asai2024selfrag}{5}
+\bibcite{sarthi2024raptor}{6}
+\bibcite{tao2025treerag}{7}
+\bibcite{lu2026hichunk}{8}
+\bibcite{fatehkia2024trag}{9}
+\bibcite{edge2024graphrag}{10}
+\bibcite{huang2022layoutlmv3}{11}
+\@writefile{toc}{\contentsline {chapter}{REFERENCES}{17}{section*.18}\protected@file@percent }
+\bibcite{ogorman1993document}{12}
+\bibcite{breuel2002high}{13}
+\bibcite{salton1983introduction}{14}
+\bibcite{kahn1962topological}{15}
+\bibcite{tarjan1972depth}{16}
+\bibcite{cormen2009introduction}{17}
+\gdef \@abspage@last{28}

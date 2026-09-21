@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SHIA-RAG — Layout-Aware Hierarchical RAG (Minor Project)</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --panel:#ffffff; --ink:#182338; --muted:#647089;
+    --line:#e3e8f2; --brand:#2a5bd7; --brand2:#0e9d8f; --accent:#7b3ff2;
+    --good:#1f9d55; --warn:#d97706; --bad:#d64550;
+    --shadow:0 1px 3px rgba(20,30,60,.07),0 8px 24px rgba(20,30,60,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.5}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 20px 80px}
+  header.hero{background:linear-gradient(135deg,#1e3a8a,#2a5bd7 55%,#0e9d8f);
+    color:#fff;border-radius:18px;padding:28px 30px;box-shadow:var(--shadow)}
+  header.hero h1{margin:0 0 4px;font-size:26px;letter-spacing:.2px}
+  header.hero p{margin:0;opacity:.92;font-size:14.5px;max-width:740px}
+  header.hero .tag{display:inline-block;margin-top:14px;font-size:12px;
+    background:rgba(255,255,255,.16);padding:4px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.25)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:22px;margin-top:20px;box-shadow:var(--shadow)}
+  .card h2{margin:0 0 4px;font-size:17px}
+  .card .sub{color:var(--muted);font-size:13px;margin:0 0 16px}
+  /* input */
+  .drop{border:2px dashed #c4d0ea;border-radius:14px;padding:30px;text-align:center;
+    background:#fbfcff;transition:.15s;cursor:pointer}
+  .drop.drag{border-color:var(--brand);background:#eef3ff}
+  .drop b{color:var(--brand)}
+  .drop small{display:block;color:var(--muted);margin-top:6px}
+  .exrow{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px;margin-top:16px}
+  .exbtn{font-size:13px;border:1px solid var(--line);background:#fff;color:var(--brand);
+    padding:8px 16px;border-radius:10px;cursor:pointer;transition:.12s;font-weight:600}
+  .exbtn:hover{border-color:var(--brand);background:#f2f6ff}
+  #status{margin-top:16px;font-size:14px;color:var(--muted);display:none}
+  .spinner{display:inline-block;width:15px;height:15px;border:2px solid #cfd8ec;
+    border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-3px;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .err{color:var(--bad)}
+  #results{display:none}
+  /* stat grid */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px}
+  .stat{background:#f7f9ff;border:1px solid var(--line);border-radius:12px;padding:14px 12px;text-align:center}
+  .stat .v{font-size:24px;font-weight:700;color:var(--brand)}
+  .stat .l{font-size:11.5px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
+  /* reading order */
+  .ro-head{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:14px}
+  .ro-metric{flex:1;min-width:200px;background:#f7f9ff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .ro-metric .t{font-size:12.5px;color:var(--muted)}
+  .bar{height:12px;border-radius:6px;background:#e6ebf5;overflow:hidden;margin-top:8px}
+  .bar>span{display:block;height:100%;border-radius:6px}
+  .ro-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .ro-col h4{margin:0 0 8px;font-size:13px}
+  .ro-col ol{margin:0;padding-left:26px}
+  .ro-col li{font-size:12.5px;padding:3px 6px;border-radius:6px;margin-bottom:2px;color:#333}
+  .ro-col li .b{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;margin-left:6px;vertical-align:1px}
+  .col-left{background:#e8f1ff;color:#1e4bb8}.col-right{background:#e6f7f2;color:#0b7d70}.col-span{background:#f3ecff;color:#6b2fce}
+  .naive li{background:#fdf1f1}.gutter li{background:#f0faf4}
+  /* tree */
+  .tree{font-size:13.5px}
+  .tnode{padding:5px 8px;border-radius:8px;margin:3px 0;display:flex;align-items:center;gap:8px}
+  .tnode:hover{background:#f5f8ff}
+  .tnum{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#fff;background:var(--brand);
+    padding:1px 7px;border-radius:6px;min-width:34px;text-align:center}
+  .tnum.none{background:#aeb8cc}
+  .tname{font-weight:600}
+  .tconf{margin-left:auto;font-size:11px;color:var(--muted)}
+  .tconf b{color:var(--good)}
+  .children{margin-left:20px;border-left:2px solid var(--line);padding-left:10px}
+  .note{font-size:12.5px;color:var(--muted);margin-top:10px}
+  /* validation */
+  .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .check{display:flex;align-items:center;gap:10px;background:#f7f9ff;border:1px solid var(--line);
+    border-radius:10px;padding:11px 14px;font-size:13.5px}
+  .check .ic{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
+  .ok{background:var(--good)}.no{background:var(--warn)}
+  footer{margin-top:28px;text-align:center;color:var(--muted);font-size:12px}
+  @media(max-width:640px){.ro-cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>SHIA-RAG</h1>
+    <p>A layout-aware hierarchical knowledge representation for Retrieval-Augmented Generation.
+       Give it one research PDF and watch the pipeline recover the document's reading order and
+       induce a validated concept hierarchy — live.</p>
+    <span class="tag">M.Tech Minor Project · NITK Surathkal</span>
+  </header>
+
+  <!-- INPUT -->
+  <div class="card">
+    <h2>Analyze a document</h2>
+    <p class="sub">Upload one text-based research PDF. This runs the minor-project pipeline on that single document.</p>
+    <div class="drop" id="drop">
+      <b>Click to upload</b> or drag a PDF here<small>works with any digital (non-scanned) PDF</small>
+      <input type="file" id="file" accept="application/pdf" hidden>
+    </div>
+    {% if samples %}
+    <div class="exrow" style="flex-wrap: wrap; margin-top: 14px; gap: 8px;">
+      <span>Or select a corpus paper:</span>
+      <select id="sampleSelect" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); font-size: 13px; max-width: 340px; background: #fff;">
+        {% for s in samples %}
+        <option value="{{ s }}" {% if s == example %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      <button class="exbtn" id="exbtn" style="cursor: pointer; font-weight: 600;">Run Analysis</button>
+    </div>
+    {% endif %}
+    <div id="status"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <div class="card">
+      <h2 id="docName">Document</h2>
+      <p class="sub">Pipeline summary — physical text blocks extracted, and the semantic hierarchy induced from them.</p>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card">
+      <h2>1 · Reading-order recovery (column-gutter algorithm)</h2>
+      <p class="sub">Naive top-to-bottom extraction jumps across columns; the gutter algorithm reads each column
+         in order. Lower inversion % = closer to the correct reading order. ROM = reading-order monotonicity.</p>
+      <div class="ro-head">
+        <div class="ro-metric">
+          <div class="t">Naive top-to-bottom</div>
+          <div style="font-size:22px;font-weight:700;color:var(--bad)" id="naiveInv"></div>
+          <div class="bar"><span id="naiveBar" style="background:var(--bad)"></span></div>
+          <div class="t" id="naiveRom" style="margin-top:6px"></div>
+        </div>
+        <div class="ro-metric">
+          <div class="t">Column-gutter (ours)</div>
+          <div style="font-size:22px;font-weight:700;color:var(--good)" id="gutInv"></div>
+          <div class="bar"><span id="gutBar" style="background:var(--good)"></span></div>
+          <div class="t" id="gutRom" style="margin-top:6px"></div>
+        </div>
+      </div>
+      <div class="ro-cols" id="roDemo"></div>
+      <p class="note" id="roNote"></p>
+    </div>
+
+    <div class="card">
+      <h2>2 · Induced concept hierarchy</h2>
+      <p class="sub">Section numbering is the primary attachment signal; the semantic Parent-Ranking Engine (PRE)
+         is the fallback for unnumbered headings. Each node carries a KCE confidence score.</p>
+      <div class="tree" id="tree"></div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Graph-validation guarantees</h2>
+      <p class="sub">Every candidate edge passes the validator before it is added, so the hierarchy is
+         structurally sound by construction.</p>
+      <div class="checks" id="checks"></div>
+    </div>
+
+  </div>
+
+  <footer>SHIA-RAG minor-project demo · runs the real <code>shia_minor</code> pipeline (pdfplumber · scikit-learn · numpy · pydantic)</footer>
+</div>
+
+<script>
+const EXAMPLE = {{ (example or "")|tojson }};
+const $ = id => document.getElementById(id);
+
+// upload wiring
+const drop=$("drop"), file=$("file");
+drop.onclick=()=>file.click();
+file.onchange=()=>{ if(file.files[0]) analyze({file:file.files[0]}); };
+["dragover","dragenter"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("drag");}));
+["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("drag");}));
+drop.addEventListener("drop",ev=>{ const f=ev.dataTransfer.files[0]; if(f) analyze({file:f}); });
+if($("exbtn")) $("exbtn").onclick=()=>{
+  const sel = $("sampleSelect");
+  const chosen = sel ? sel.value : EXAMPLE;
+  if(chosen) analyze({sample: chosen});
+};
+
+function setStatus(html,isErr){
+  const s=$("status"); s.style.display="block";
+  s.className=isErr?"err":""; s.innerHTML=html;
+}
+
+async function analyze(opts){
+  $("results").style.display="none";
+  const label = opts.sample ? opts.sample : opts.file.name;
+  setStatus('<span class="spinner"></span>Running the pipeline on <b>'+label.replace(/\.pdf$/i,"")+'</b> …',false);
+  const fd=new FormData();
+  if(opts.sample) fd.append("sample",opts.sample);
+  else fd.append("pdf",opts.file);
+  try{
+    const r=await fetch("/api/analyze",{method:"POST",body:fd});
+    const d=await r.json();
+    if(!r.ok){ setStatus("Error: "+(d.error||r.status),true); return; }
+    render(d); $("status").style.display="none";
+  }catch(e){ setStatus("Request failed: "+e,true); }
+}
+
+function render(d){
+  $("docName").textContent=d.name.replace(/\.pdf$/i,"");
+  const S=[["Pages",d.pages],["Text blocks",d.blocks],["Concepts",d.concepts],
+           ["Edges",d.edges],["Roots",d.roots],["Max depth",d.max_depth],
+           ["Numbered §",d.n_sections],["Orphans",d.orphans]];
+  $("stats").innerHTML=S.map(([l,v])=>`<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  const ro=d.reading;
+  $("naiveInv").textContent=ro.naive_inv+"% inversions";
+  $("gutInv").textContent=ro.gutter_inv+"% inversions";
+  $("naiveBar").style.width=Math.min(100,ro.naive_inv*3)+"%";
+  $("gutBar").style.width=Math.min(100,Math.max(2,ro.gutter_inv*3))+"%";
+  $("naiveRom").textContent="ROM "+ro.naive_rom+"%";
+  $("gutRom").textContent="ROM "+ro.gutter_rom+"%";
+
+  const dm=d.page_demo;
+  if(dm){
+    const li=x=>`<li class="col-${x.col}">${esc(x.text)}<span class="b col-${x.col}">${x.col}</span></li>`;
+    $("roDemo").innerHTML=
+      `<div class="ro-col"><h4>Naive order (page ${dm.page}) — jumps columns</h4><ol class="naive">${dm.naive.map(li).join("")}</ol></div>`+
+      `<div class="ro-col"><h4>Gutter order (page ${dm.page}) — column by column</h4><ol class="gutter">${dm.gutter.map(li).join("")}</ol></div>`;
+    $("roNote").textContent="Shown: the first blocks of the busiest page. Notice the naive order mixes left/right column text, while the gutter order keeps each column intact.";
+  }else{ $("roDemo").innerHTML=""; $("roNote").textContent=""; }
+
+  $("tree").innerHTML=d.tree.map(n=>renderNode(n)).join("") || '<p class="note">No headings detected.</p>';
+
+  const V=d.validation;
+  const C=[["Acyclic (no cycles)",V.acyclic],["Single parent per node",V.single_parent],
+           ["Depth ≤ D_max (8)",V.depth_ok],["No orphan concepts",V.no_orphans],
+           ["Single document root",V.one_root]];
+  $("checks").innerHTML=C.map(([l,ok])=>
+    `<div class="check"><div class="ic ${ok?'ok':'no'}">${ok?'✓':'!'}</div>${l}</div>`).join("");
+
+  $("results").style.display="block";
+  $("results").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function renderNode(n){
+  const num=n.section?`<span class="tnum">${esc(n.section)}</span>`:`<span class="tnum none">§</span>`;
+  const kids=n.children&&n.children.length
+    ? `<div class="children">${n.children.map(renderNode).join("")}</div>` : "";
+  return `<div><div class="tnode">${num}<span class="tname">${esc(n.name)}</span>
+    <span class="tconf">conf <b>${n.confidence}</b></span></div>${kids}</div>`;
+}
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+</script>
+</body>
+</html>

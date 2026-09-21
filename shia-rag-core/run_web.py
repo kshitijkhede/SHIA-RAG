@@ -24,7 +24,7 @@ for _p in [str(PROJECT_ROOT), str(PROJECT_ROOT / "src"), str(WORKSPACE_ROOT)]:
         sys.path.insert(0, _p)
 
 import uvicorn
-from src.api import app, pipeline
+from src.api import pipeline
 
 
 def main():

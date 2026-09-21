@@ -1,0 +1,44 @@
+\vspace{\baselineskip}
+
+\begin{table}[hbtp]
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{p{0.2\textwidth} p{0.75\textwidth}}
+ACR & Ancestor Chain Recall \\
+AI & Artificial Intelligence \\
+ANN & Approximate Nearest Neighbor \\
+API & Application Programming Interface \\
+BPE & Byte-Pair Encoding \\
+BTR & Bidirectional Traversal Retrieval \\
+CLD & Cross-Link Discovery \\
+CPG & Candidate Parent Generator \\
+DAG & Directed Acyclic Graph \\
+DFS & Depth-First Search \\
+DPR & Dense Passage Retrieval \\
+FD & Forest Density \\
+FI & Forest Integrator \\
+GMM & Gaussian Mixture Model \\
+HKF & Heterogeneous Knowledge Forest \\
+HV & Hierarchy Validator \\
+JSON & JavaScript Object Notation \\
+KCE & Knowledge Confidence Engine \\
+LLM & Large Language Model \\
+LSH & Locality-Sensitive Hashing \\
+ML & Machine Learning \\
+NLP & Natural Language Processing \\
+NTED & Normalized Tree Edit Distance \\
+OCR & Optical Character Recognition \\
+OR & Orphan Rate \\
+OSI & Open Systems Interconnection \\
+PAA & Parent Assignment Accuracy \\
+PDF & Portable Document Format \\
+PRE & Parent Ranking Engine \\
+QA & Question Answering \\
+RAG & Retrieval-Augmented Generation \\
+SHA & Secure Hash Algorithm \\
+SHIA & Semantic Hierarchy Induction Architecture \\
+SOTA & State-of-the-Art \\
+TCP & Transmission Control Protocol \\
+TED & Tree Edit Distance \\
+UDP & User Datagram Protocol \\
+\end{tabular}
+\end{table}

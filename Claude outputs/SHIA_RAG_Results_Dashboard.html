@@ -1,0 +1,116 @@
+<title>SHIA-RAG Results</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root{
+    --bg:#f5f7f9; --surface:#ffffff; --surface-2:#eef1f5; --ink:#141a22; --muted:#5c6675;
+    --line:#e0e5ec; --accent:#0d9488; --accent-ink:#0a6d64; --flat:#94a3b8; --flat-ink:#64748b;
+    --good:#0f7d4d; --warn:#b45309;
+    --shadow:0 1px 2px rgba(20,26,34,.06),0 10px 30px rgba(20,26,34,.07);
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0d1117;--surface:#161b22;--surface-2:#1b222b;--ink:#e6edf3;--muted:#9aa6b4;
+    --line:#232b35;--accent:#2dd4bf;--accent-ink:#5eead4;--flat:#516072;--flat-ink:#8b98a8;
+    --good:#3fb984;--warn:#e0a34a;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0d1117;--surface:#161b22;--surface-2:#1b222b;--ink:#e6edf3;--muted:#9aa6b4;
+    --line:#232b35;--accent:#2dd4bf;--accent-ink:#5eead4;--flat:#516072;--flat-ink:#8b98a8;
+    --good:#3fb984;--warn:#e0a34a;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;margin:0}
+  .wrap{max-width:920px;margin:0 auto;padding-inline:18px;padding-block:28px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink)}
+  h1{font-size:clamp(24px,4.6vw,34px);line-height:1.08;margin:.35rem 0 .3rem;font-weight:700;letter-spacing:-.015em;text-wrap:balance}
+  .sub{color:var(--muted);max-width:60ch;margin:0}
+  h2{font-size:15px;margin:0;font-weight:600;letter-spacing:-.01em}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:18px 18px 20px;margin-top:18px}
+  .chead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .chead .tag{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em}
+  /* comparison bars */
+  .cmp{display:flex;flex-direction:column;gap:18px}
+  .metric .mlabel{font-size:13.5px;font-weight:600;margin-bottom:8px}
+  .bar{display:grid;grid-template-columns:78px 1fr 58px;align-items:center;gap:10px;margin-bottom:7px}
+  .bar .who{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .track{height:22px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+  .fill{height:100%;border-radius:6px}
+  .fill.s{background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 70%,#000 0%))}
+  .fill.f{background:var(--flat)}
+  .val{font-family:var(--mono);font-size:13px;font-weight:600;text-align:right}
+  .val.s{color:var(--accent-ink)} .val.f{color:var(--flat-ink)}
+  .cap{font-size:12.5px;color:var(--muted);margin-top:12px}
+  /* stat tiles */
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}
+  @media (max-width:640px){.tiles{grid-template-columns:repeat(2,1fr)}}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:14px}
+  .tile .n{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .tile .n.g{color:var(--good)} .tile .k{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.3}
+  /* ablation */
+  .abl{display:flex;flex-direction:column;gap:9px}
+  .arow{display:grid;grid-template-columns:150px 1fr 46px;align-items:center;gap:10px}
+  .arow .who{font-size:12.5px;color:var(--ink)}
+  .arow .who.win{font-weight:700;color:var(--accent-ink)}
+  .abar{height:18px;border-radius:5px;background:var(--surface-2);overflow:hidden}
+  .abar i{display:block;height:100%;background:var(--flat);border-radius:5px}
+  .arow.win .abar i{background:linear-gradient(90deg,var(--accent),var(--accent))}
+  .av{font-family:var(--mono);font-size:12.5px;font-weight:600;text-align:right}
+  .note{margin-top:18px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--warn);
+    border-radius:10px;padding:14px 16px;font-size:13px;color:var(--muted);box-shadow:var(--shadow)}
+  .note b{color:var(--ink)}
+  .foot{margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">SHIA-RAG · measured results · your 14 papers</div>
+  <h1>Your project, run — and the numbers</h1>
+  <p class="sub">Everything here was produced by running your actual pipeline on your own research-paper corpus. Nothing is projected from other papers; nothing is mocked.</p>
+
+  <div class="card">
+    <div class="chead"><h2>SHIA-RAG vs Flat RAG — retrieval on long documents</h2><span class="tag">112 queries · 260-token budget · same for both</span></div>
+    <div class="cmp">
+      <div class="metric">
+        <div class="mlabel">Found the target concept</div>
+        <div class="bar"><span class="who">SHIA-RAG</span><div class="track"><div class="fill s" style="width:54.5%"></div></div><span class="val s">54.5%</span></div>
+        <div class="bar"><span class="who">Flat RAG</span><div class="track"><div class="fill f" style="width:31.2%"></div></div><span class="val f">31.2%</span></div>
+      </div>
+      <div class="metric">
+        <div class="mlabel">Kept the parent context with it <span style="color:var(--accent-ink);font-weight:700">(the precedence guarantee)</span></div>
+        <div class="bar"><span class="who">SHIA-RAG</span><div class="track"><div class="fill s" style="width:98.7%"></div></div><span class="val s">98.7%</span></div>
+        <div class="bar"><span class="who">Flat RAG</span><div class="track"><div class="fill f" style="width:4%"></div></div><span class="val f">4.0%</span></div>
+      </div>
+    </div>
+    <p class="cap">Both methods got the identical 112 queries and the same tight token budget — only the retrieval strategy differs. Your system finds the right concept ~1.7× more often, and almost always brings its parent context along; flat top-k retrieval almost never does.</p>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="n">97.9%</div><div class="k">Tree accuracy (parent assignment) across 12 papers</div></div>
+    <div class="tile"><div class="n g">0%</div><div class="k">Orphan facts — every node keeps a parent</div></div>
+    <div class="tile"><div class="n g">0</div><div class="k">AI calls needed to build the tree (~8&nbsp;ms/doc)</div></div>
+    <div class="tile"><div class="n">0%</div><div class="k">Reading-order errors on 2-column papers (naïve: 33%)</div></div>
+  </div>
+
+  <div class="card">
+    <div class="chead"><h2>Why the design is right — strategy ablation</h2><span class="tag">parent-assignment accuracy</span></div>
+    <div class="abl">
+      <div class="arow"><span class="who">Sequential</span><div class="abar"><i style="width:14.6%"></i></div><span class="av">14.6%</span></div>
+      <div class="arow"><span class="who">Lexical overlap</span><div class="abar"><i style="width:56%"></i></div><span class="av">56.0%</span></div>
+      <div class="arow"><span class="who">Semantic only (PRE)</span><div class="abar"><i style="width:91.9%"></i></div><span class="av">91.9%</span></div>
+      <div class="arow win"><span class="who win">Numbering + PRE (yours)</span><div class="abar"><i style="width:100%"></i></div><span class="av">100%</span></div>
+    </div>
+    <p class="cap">Each strategy was asked to pick every section's parent. Your chosen design — the document's own numbering as the primary signal, semantic ranking as fallback — is the only one that reaches 100%.</p>
+  </div>
+
+  <div class="card">
+    <div class="chead"><h2>The complete pipeline runs end-to-end</h2><span class="tag">verified</span></div>
+    <p style="margin:0;font-size:13.5px;color:var(--muted)">Ingestion → document tree → concept forest → query routing → precedence-constrained retrieval → grounded generation → self-evolution. Verified on the sample knowledge base and on a real paper (RAPTOR PDF → 217-node forest, grounding score <b style="color:var(--good)">1.0</b>). All structural invariants (acyclic, single-parent, depth-bounded) held on every run.</p>
+  </div>
+
+  <div class="note">
+    <b>One number still needs your computer.</b> Head-to-head QA accuracy (EM/F1 on HotpotQA, or accuracy on QuALITY) requires an LLM to write the answers, plus the benchmark file — neither of which this cloud environment has. Everything above is measured here on your data; that last row (SHIA-RAG's score next to RAPTOR's 82.6% and DTE-RAG's ~55 EM) is produced by running the ready benchmark script on your machine with an API key.
+  </div>
+  <div class="foot">Measured by running the SHIA-RAG pipeline · corpus = your 14 papers · 20 Sep 2026</div>
+</div>

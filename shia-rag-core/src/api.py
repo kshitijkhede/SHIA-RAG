@@ -22,11 +22,9 @@ from __future__ import annotations
 
 import logging
 import os
-import re
-import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -36,12 +34,12 @@ for _p in [str(_PROJECT_ROOT), str(_SRC_DIR)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.layer0_data_model.schemas import EdgeCategory, NodeType
+from src.layer0_data_model.schemas import EdgeCategory
 from src.pipeline import SHIARAGPipeline
 
 logger = logging.getLogger("SHIARAG_API")
@@ -678,7 +676,7 @@ def configure_llm(req: LLMConfigureRequest) -> Dict[str, Any]:
 
         if env_file.exists():
             with open(env_file, "r", encoding="utf-8") as f:
-                lines = [l for l in f if not l.startswith(f"{env_var}=")]
+                lines = [line for line in f if not line.startswith(f"{env_var}=")]
             with open(env_file, "w", encoding="utf-8") as f:
                 f.writelines(lines)
 

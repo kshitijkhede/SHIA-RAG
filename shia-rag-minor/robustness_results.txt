@@ -1,0 +1,28 @@
+Corpus: 11 documents with numbered structure
+
+=== Degradation vs rho(reading-order) (mean over corpus x 5 seeds) ===
+ level     PAA     APA     ACP
+   0.0    97.7    96.8    97.3
+   0.1    97.6    96.7    97.0
+   0.2    97.7    96.8    97.2
+   0.3    97.2    96.0    96.5
+   0.4    97.2    96.0    96.5
+   0.5    97.3    96.4    96.8
+
+=== Degradation vs delta(number-loss) (mean over corpus x 5 seeds) ===
+ level     PAA     APA     ACP
+   0.0    97.7    96.8    97.3
+   0.1    96.3    94.2    95.3
+   0.2    95.1    92.2    93.8
+   0.3    94.7    91.2    93.1
+   0.4    93.8    90.4    92.3
+   0.5    92.7    89.2    91.2
+
+=== H2a: confidence of correct vs wrong attachments (delta=0.3) ===
+mean KCE confidence  correct=0.611  wrong=0.548  gap=+0.062
+point-biserial r(confidence, correct) = +0.162  (n=980)
+
+=== H2b: confidence-gated repair (delta=0.3, tau=0.60) ===
+       setting     PAA     APA     ACP
+     no repair    94.9    92.8    94.1
+  gated repair    95.1    93.3    94.4

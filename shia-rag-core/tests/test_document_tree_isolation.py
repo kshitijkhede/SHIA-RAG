@@ -10,7 +10,6 @@ Verifies:
 
 import sys
 from pathlib import Path
-import pytest
 
 _TESTS_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _TESTS_DIR.parent
@@ -20,7 +19,6 @@ for _p in [str(_PROJECT_ROOT), str(_PROJECT_ROOT / "src")]:
 
 from src.layer0_data_model.schemas import DocumentMimeType, KnowledgeNode, NodeType
 from src.pipeline import SHIARAGPipeline
-from src.api import delete_document, get_forest_graph, list_documents, pipeline as api_pipeline
 
 
 class TestDocumentTreeIsolation:

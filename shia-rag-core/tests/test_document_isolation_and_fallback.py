@@ -13,7 +13,6 @@ Validates:
 
 import sys
 from pathlib import Path
-import pytest
 
 _TESTS_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _TESTS_DIR.parent
