@@ -35,3 +35,14 @@ New Paper/
 secrets.*
 *api_key*
 *API_KEY*
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.bbl
+*.blg
