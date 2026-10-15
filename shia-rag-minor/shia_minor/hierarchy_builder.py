@@ -51,11 +51,13 @@ class HierarchyBuilder:
     # ---------- CPG++ ----------
     @staticmethod
     def candidate_parents(c: ConceptNode, concepts: List[ConceptNode]) -> List[ConceptNode]:
-        strict = [u for u in concepts
-                  if u.order < c.order and u.level < c.level and u.doc_id == c.doc_id]
-        if strict:
-            return strict
-        return [u for u in concepts if u.order < c.order and u.doc_id == c.doc_id]
+        # Only strictly shallower earlier headings are valid parents. When none
+        # exist, return [] so the caller attaches the concept to the document
+        # title instead of chaining it under an earlier same-level sibling
+        # (which turned flat sibling sections, e.g. a resume's Education /
+        # Projects / Skills, into a spurious deep chain).
+        return [u for u in concepts
+                if u.order < c.order and u.level < c.level and u.doc_id == c.doc_id]
 
     # ---------- PRE ----------
     def _pre_best(self, c: ConceptNode, cands: List[ConceptNode],
