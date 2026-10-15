@@ -98,7 +98,10 @@ class StructuralParser:
             rest = first_line[m.end():].strip(" .:-")
             parts = num.split(".")
             is_year = len(parts) == 1 and len(parts[0]) >= 4          # e.g. 2024
-            titled = bool(re.match(r"[A-Z]", rest))                    # starts uppercase
+            # a real section title starts with an UPPERCASE letter of any script
+            # ("Experiments", "Ψ-RAG"); this rejects equations ("n ( n-1)"),
+            # footers ("th Conference") and ids ("v92500") that start lowercase.
+            titled = len(rest) >= 2 and rest[:1].isupper()
             few_words = len(first_line.split()) <= 12
             big_enough = block.font_size >= 0.95 * body
             if not is_year and titled and few_words and big_enough:
@@ -107,8 +110,9 @@ class StructuralParser:
         key = first_line.lower().strip(" .:0123456789")
         if key in _STD_SECTIONS and len(first_line) < 40:
             return True, 1, ""
-        # other unnumbered heading: larger font, short, title-like
-        if len(first_line) < 70 and len(first_line.split()) <= 10 and re.match(r"[A-Z]", first_line):
+        # other unnumbered heading: larger font, short, title-like (>=3 chars
+        # so decorative single-letter drop-caps are not treated as headings)
+        if 3 <= len(first_line) < 70 and len(first_line.split()) <= 10 and re.match(r"[A-Z]", first_line):
             if block.font_size >= 1.5 * body:
                 return True, 1, ""
             if block.font_size >= HEADING_FONT_RATIO * body:

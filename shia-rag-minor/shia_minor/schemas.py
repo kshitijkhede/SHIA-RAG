@@ -64,6 +64,7 @@ class ConceptNode(BaseModel):
     section_number: Optional[str] = None  # e.g. "3.1" when the heading is numbered
     order: int = Field(ge=0)              # rank in reading order
     definition: str = ""
+    body_text: str = ""                   # body paragraphs under this heading
     is_bold: bool = False
     font_ratio: float = 1.0              # font size / body font size
     parent_id: Optional[str] = None

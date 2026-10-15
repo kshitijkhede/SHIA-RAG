@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-SHIA-RAG minor-project demo web app.
+SHIA-RAG minor-project demo web app (v2).
 
-A small Flask front-end over the REAL pipeline (the same shia_minor package used
-by run_demo.py / evaluate.py). Drop in any PDF (or pick a sample paper) and the
-page shows, visually:
+A Flask front-end over the REAL pipeline.  Drop in any PDF and the page shows:
 
   * corpus-level summary counts,
   * the column-gutter reading-order fix (naive vs gutter, side by side),
   * the induced concept hierarchy as a tree,
   * Parent-Assignment-Accuracy of the four attachment strategies,
-  * the graph-validation guarantees (acyclic / single-parent / depth-bound / no orphans).
+  * the graph-validation guarantees,
+  * **NEW** an interactive query box for hierarchy-aware retrieval (the 'R' in RAG).
 
 Run:   python app.py     then open  http://127.0.0.1:5000
 """
@@ -34,7 +33,7 @@ app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024  # 40 MB upload cap
 # sample corpus sits next to the project folder
 SAMPLE_DIR = (Path(__file__).resolve().parent.parent / "research_papers")
 
-_pipe = Pipeline()
+_pipe = Pipeline(store_dir="./shia_store")
 _parser = StructuralParser()
 _extractor = ConceptExtractor(_parser)
 _builder = HierarchyBuilder()
@@ -58,6 +57,7 @@ def build_tree(concepts):
             "depth": c.depth,
             "confidence": round(c.confidence, 2),
             "definition": (c.definition or "")[:180],
+            "body_preview": (c.body_text or "")[:120],
             "children": [],
         }
         for c in concepts
@@ -139,6 +139,8 @@ def analyze_pdf(path: str, display_name: str):
         "max_depth": res["max_depth"],
         "orphans": res["orphans"],
         "n_sections": n_sections,
+        "body_text_chars": res.get("body_text_chars", 0),
+        "retriever_backend": res.get("retriever_backend", "tfidf"),
         "reading": {
             "naive_inv": round(naive_inv, 2),
             "gutter_inv": round(gutter_inv, 2),
@@ -162,7 +164,9 @@ def analyze_pdf(path: str, display_name: str):
 def index():
     samples = sample_files()
     example = samples[0] if samples else ""
-    return render_template("index.html", samples=samples, example=example)
+    stored = _pipe.list_documents()
+    return render_template("index.html", samples=samples, example=example,
+                           stored_docs=stored)
 
 
 @app.route("/api/analyze", methods=["POST"])
@@ -181,15 +185,62 @@ def api_analyze():
         if not f.filename.lower().endswith(".pdf"):
             return jsonify({"error": "Please upload a .pdf file."}), 400
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        tmp.close()   # close our handle first so Windows lets pdfplumber open it
         try:
             f.save(tmp.name)
             return jsonify(analyze_pdf(tmp.name, f.filename))
         finally:
-            os.unlink(tmp.name)
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass   # Windows may still hold a brief lock; ignore cleanup error
     except Exception as e:  # keep the demo alive; report the failure to the UI
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
 
+# ---------- NEW: Query endpoint ----------
+@app.route("/api/query", methods=["POST"])
+def api_query():
+    """Retrieve top-k concepts relevant to a natural-language question."""
+    try:
+        data = request.get_json(silent=True) or {}
+        question = data.get("question", "").strip()
+        if not question:
+            return jsonify({"error": "No question provided."}), 400
+        top_k = min(int(data.get("top_k", 5)), 10)
+
+        if not _pipe.retriever.is_indexed:
+            return jsonify({"error": "No document indexed yet. Analyze a PDF first."}), 400
+
+        results = _pipe.query(question, top_k=top_k)
+        return jsonify({
+            "question": question,
+            "backend": _pipe.embedder.backend,
+            "results": [
+                {
+                    "concept_id": r.concept_id,
+                    "name": r.name,
+                    "score": r.score,
+                    "confidence": r.confidence,
+                    "section_number": r.section_number,
+                    "depth": r.depth,
+                    "ancestor_path": r.ancestor_path,
+                    "body_snippet": r.body_snippet,
+                    "context": r.context,
+                }
+                for r in results
+            ],
+        })
+    except Exception as e:
+        return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+
+
+# ---------- NEW: Stored documents endpoint ----------
+@app.route("/api/documents")
+def api_documents():
+    return jsonify(_pipe.list_documents())
+
+
 if __name__ == "__main__":
-    print("SHIA-RAG demo running at  http://127.0.0.1:5000")
+    print("SHIA-RAG v2 demo running at  http://127.0.0.1:5000")
     app.run(host="127.0.0.1", port=5000, debug=False)

@@ -19,7 +19,10 @@ from .schemas import BoundingBox, TextBlock
 
 _LINE_TOL = 3.0   # pt: words on the same visual line
 _PARA_GAP = 6.0   # pt: vertical gap that still counts as one paragraph block
-_NUM = re.compile(r"^\d+(?:\.\d+){0,5}\s+[A-Z]")   # "3.1 Title" (Title-cased)
+_X_TOL = 1.5      # pt: word-splitting tolerance (recovers spaces on PDFs whose
+                  #     font has very narrow space glyphs; default 3 glues words)
+# "3.1 Title", "5.Experiments" (no space) or "3.Ψ-RAG" (non-ASCII) all count
+_NUM = re.compile(r"^\d+(?:\.\d+){0,5}\.?\s*[^\W\d_]", re.UNICODE)
 
 
 class PDFIngestionService:
@@ -40,35 +43,68 @@ class PDFIngestionService:
         return blocks
 
     def _page_blocks(self, page) -> List[dict]:
+        # x_tolerance recovers spaces on PDFs whose space glyph is very narrow;
+        # without it, whole lines come back as one glued "word".
         words = page.extract_words(extra_attrs=["size", "fontname"],
-                                   use_text_flow=False, keep_blank_chars=False)
+                                   use_text_flow=False, keep_blank_chars=False,
+                                   x_tolerance=_X_TOL)
         if not words:
             return []
+
+        # Column-aware line grouping: group words into visual rows by vertical
+        # position, then SPLIT each row at the column gutter so a heading in one
+        # column is never concatenated with body text from the other column.
+        page_w = float(getattr(page, "width", None) or max(w["x1"] for w in words))
+        gutter = page_w / 2.0
+        col_gap = max(10.0, 0.03 * page_w)
+
         words.sort(key=lambda w: (round(w["top"] / _LINE_TOL), w["x0"]))
-        lines, cur, cur_top = [], [], None
+        rows, cur, cur_top = [], [], None
         for w in words:
             if cur and abs(w["top"] - cur_top) > _LINE_TOL:
-                lines.append(self._mkline(cur)); cur = []
+                rows.append(cur); cur = []
             if not cur:
                 cur_top = w["top"]
             cur.append(w)
         if cur:
-            lines.append(self._mkline(cur))
+            rows.append(cur)
+
+        lines = []
+        for row in rows:
+            row.sort(key=lambda w: w["x0"])
+            seg = [row[0]]
+            for prv, w in zip(row, row[1:]):
+                straddles = prv["x1"] <= gutter <= w["x0"]
+                if (w["x0"] - prv["x1"] > col_gap) or (straddles and w["x0"] - prv["x1"] > 6.0):
+                    lines.append(self._mkline(seg)); seg = []
+                seg.append(w)
+            if seg:
+                lines.append(self._mkline(seg))
+
         # page body size = most common line size weighted by text length
         cnt: Counter = Counter()
         for l in lines:
             if len(l["text"]) > 30:
                 cnt[round(l["size"])] += len(l["text"])
         body = cnt.most_common(1)[0][0] if cnt else 10.0
-        # merge lines into paragraphs, but keep heading-like lines isolated
-        lines.sort(key=lambda l: l["top"])
+
+        # merge lines into paragraphs, keeping heading-like lines isolated and
+        # never merging across the gutter (same-column guard).
+        def col_of(l):
+            return 0 if (l["x0"] + l["x1"]) / 2.0 < gutter else 1
+        lines.sort(key=lambda l: (col_of(l), l["top"]))
         merged, prev = [], None
         for l in lines:
-            heading_like = ((l["size"] >= 1.15 * body or _NUM.match(l["text"]))
-                            and len(l["text"]) < 90 and len(l["text"].split()) <= 12)
+            txt = l["text"].strip()
+            # drop decorative drop-cap / single huge letters (e.g. "M", "X")
+            if len(txt) <= 1:
+                continue
+            heading_like = ((l["size"] >= 1.15 * body or _NUM.match(txt))
+                            and len(txt) < 90 and len(txt.split()) <= 12)
+            same_col = prev is not None and col_of(l) == col_of(prev)
             if heading_like:
                 merged.append(dict(l)); prev = None      # heading stands alone
-            elif (prev and (l["top"] - prev["bottom"]) <= _PARA_GAP
+            elif (prev and same_col and 0 <= (l["top"] - prev["bottom"]) <= _PARA_GAP
                     and abs(l["size"] - prev["size"]) < 0.6):
                 prev["bottom"] = l["bottom"]
                 prev["x0"] = min(prev["x0"], l["x0"]); prev["x1"] = max(prev["x1"], l["x1"])

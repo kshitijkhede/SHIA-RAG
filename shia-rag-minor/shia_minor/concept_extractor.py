@@ -32,10 +32,25 @@ class ConceptExtractor:
 
     def extract(self, ordered_blocks: List[TextBlock], doc_id: str) -> List[ConceptNode]:
         body = self.parser.body_font_size(ordered_blocks)
+
+        # Identify running headers / footers / repeated table labels: the same
+        # short unnumbered text appearing on 3+ different pages (e.g. a "Method"
+        # column header). These are not section headings and must be dropped.
+        from collections import defaultdict
+        seen_pages: defaultdict = defaultdict(set)
+        for b in ordered_blocks:
+            is_head, _, num = self.parser.classify_heading(b, body)
+            if is_head and not num:
+                seen_pages[self._clean_name(b.text)].add(b.page)
+        repeated = {name for name, pages in seen_pages.items() if len(pages) >= 3}
+
         concepts: List[ConceptNode] = []
         for i, b in enumerate(ordered_blocks):
             is_head, level, num = self.parser.classify_heading(b, body)
             if not is_head:
+                continue
+            name = self._clean_name(b.text)
+            if not num and name in repeated:        # drop running header/label
                 continue
             definition = ""
             for nb in ordered_blocks[i + 1:i + 3]:
@@ -46,7 +61,7 @@ class ConceptExtractor:
                     break
             concepts.append(ConceptNode(
                 concept_id=f"{doc_id}_c{len(concepts)}",
-                name=self._clean_name(b.text),
+                name=name,
                 doc_id=doc_id, level=level,
                 section_number=num or None, order=i,
                 definition=definition, is_bold=b.is_bold,

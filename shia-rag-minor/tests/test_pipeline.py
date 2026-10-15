@@ -1,4 +1,4 @@
-"""Unit tests for the minor-project modules (invariants, reading order, PRE)."""
+"""Unit tests for the minor-project modules (v2: includes retrieval tests)."""
 import sys
 from pathlib import Path
 
@@ -42,6 +42,9 @@ from shia_minor.structural_parser import StructuralParser
 from shia_minor.graph_validator import GraphValidator
 from shia_minor.hierarchy_builder import HierarchyBuilder
 from shia_minor.kce_scorer import KCEScorer
+from shia_minor.embedder import Embedder
+from shia_minor.chunker import Chunker
+from shia_minor.retriever import HierarchyRetriever
 
 
 def _blk(bid, x0, y0, x1, y1, text="body text that is quite long for a block", size=10.0, page=1):
@@ -57,6 +60,12 @@ class TestSchemas:
     def test_depth_bound(self):
         with pytest.raises(ValueError):
             ConceptNode(concept_id="a", name="A", doc_id="d", level=1, order=0, depth=9)
+
+    def test_body_text_field(self):
+        c = ConceptNode(concept_id="a", name="A", doc_id="d", level=1, order=0)
+        assert c.body_text == ""
+        c.body_text = "Some paragraph content."
+        assert c.body_text == "Some paragraph content."
 
 
 class TestReadingOrder:
@@ -129,6 +138,106 @@ class TestHierarchyAndKCE:
         # child confidence cannot exceed its own local confidence
         for c in concepts:
             assert c.confidence <= c.local_confidence + 1e-9
+
+
+# ===== NEW: Embedder tests =====
+class TestEmbedder:
+    def test_embed_returns_correct_shape(self):
+        emb = Embedder(force_tfidf=True)
+        vecs = emb.embed(["hello world", "test document"])
+        assert vecs.shape[0] == 2
+        assert vecs.shape[1] > 0
+
+    def test_query_embed_shape(self):
+        emb = Embedder(force_tfidf=True)
+        emb.embed(["corpus text one", "corpus text two"])
+        q = emb.embed_query("test query")
+        assert q.shape[0] == 1
+
+    def test_backend_name(self):
+        emb = Embedder(force_tfidf=True)
+        assert emb.backend == "tfidf"
+
+    def test_cosine_scores_shape(self):
+        import numpy as np
+        emb = Embedder(force_tfidf=True)
+        docs = emb.embed(["alpha beta", "gamma delta", "epsilon zeta"])
+        q = emb.embed_query("alpha")
+        scores = Embedder.cosine_scores(q, docs)
+        assert scores.shape == (3,)
+
+
+# ===== NEW: Chunker tests =====
+class TestChunker:
+    def test_assigns_body_text(self):
+        blocks = [
+            _blk(0, 50, 10, 400, 30, "1 Introduction", size=14.0),
+            _blk(1, 50, 40, 400, 100, "This is the body text of the introduction section which is long enough to be captured."),
+            _blk(2, 50, 110, 400, 130, "2 Methods", size=14.0),
+            _blk(3, 50, 140, 400, 200, "We used the following methodology in our research experiments thoroughly."),
+        ]
+        parser = StructuralParser()
+        body = parser.body_font_size(blocks)
+        concepts = [
+            ConceptNode(concept_id="c0", name="1 Introduction", doc_id="d",
+                        level=1, order=0, section_number="1"),
+            ConceptNode(concept_id="c1", name="2 Methods", doc_id="d",
+                        level=1, order=2, section_number="2"),
+        ]
+        chunker = Chunker(parser)
+        chunker.assign(blocks, concepts)
+        assert "body text of the introduction" in concepts[0].body_text
+        assert "methodology" in concepts[1].body_text
+
+
+# ===== NEW: Retriever tests =====
+class TestRetriever:
+    def _indexed_retriever(self):
+        concepts = [
+            ConceptNode(concept_id="c0", name="Introduction to Machine Learning",
+                        doc_id="d", level=1, order=0,
+                        body_text="Machine learning is a subset of artificial intelligence."),
+            ConceptNode(concept_id="c1", name="Neural Networks",
+                        doc_id="d", level=2, order=1, parent_id="c0",
+                        body_text="Neural networks are computing systems inspired by biological neural networks."),
+            ConceptNode(concept_id="c2", name="Decision Trees",
+                        doc_id="d", level=2, order=2, parent_id="c0",
+                        body_text="Decision trees are a supervised learning method used for classification."),
+        ]
+        KCEScorer().score(concepts)
+        emb = Embedder(force_tfidf=True)
+        ret = HierarchyRetriever(emb)
+        ret.index(concepts)
+        return ret, concepts
+
+    def test_query_returns_results(self):
+        ret, _ = self._indexed_retriever()
+        results = ret.query("What are neural networks?", top_k=2)
+        assert len(results) > 0
+        assert len(results) <= 2
+
+    def test_results_have_required_fields(self):
+        ret, _ = self._indexed_retriever()
+        results = ret.query("machine learning", top_k=1)
+        r = results[0]
+        assert hasattr(r, 'concept_id')
+        assert hasattr(r, 'name')
+        assert hasattr(r, 'score')
+        assert hasattr(r, 'ancestor_path')
+        assert hasattr(r, 'context')
+
+    def test_ancestor_path_populated(self):
+        ret, _ = self._indexed_retriever()
+        results = ret.query("neural networks", top_k=3)
+        # At least one result should have an ancestor path with "→"
+        paths = [r.ancestor_path for r in results]
+        has_path = any("→" in p for p in paths)
+        # c1 and c2 have parent_id="c0", so their paths should contain "→"
+        assert has_path
+
+    def test_not_indexed_returns_empty(self):
+        ret = HierarchyRetriever(Embedder(force_tfidf=True))
+        assert ret.query("anything") == []
 
 
 if __name__ == "__main__":

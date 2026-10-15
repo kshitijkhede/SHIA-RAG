@@ -75,21 +75,36 @@ class HierarchyBuilder:
     # ---------- build (numbering primary, PRE fallback) ----------
     def build(self, concepts: List[ConceptNode]) -> Tuple[List[HierarchyEdge], List[ConceptNode]]:
         concepts = sorted(concepts, key=lambda c: c.order)
+
+        # document title/root: earliest concept with the largest font ratio
+        title = max(concepts, key=lambda c: (c.font_ratio, -c.order)) if concepts else None
+        if title is not None:
+            title.level = 0
+            title.parent_id = None
+            title.depth = 0
+            # Fold title-continuation lines back into the title: a title that
+            # wraps onto a second line uses the SAME (unique, largest) title
+            # font and sits on the title's page, so it must not become its own
+            # section node. Match on font + page, not reading-order distance
+            # (other blocks can sort between the two title lines).
+            if title.font_ratio >= 1.3:
+                tpage = title.evidence[0].page if title.evidence else None
+                cont = [c for c in concepts
+                        if c is not title and c.section_number is None
+                        and c.font_ratio >= 0.98 * title.font_ratio
+                        and (tpage is None or (c.evidence and c.evidence[0].page == tpage))]
+                for c in sorted(cont, key=lambda c: c.order):
+                    title.name = f"{title.name} {c.name}".strip()[:120]
+                if cont:
+                    drop = {c.concept_id for c in cont}
+                    concepts = [c for c in concepts if c.concept_id not in drop]
+
         nodes = {c.concept_id: c for c in concepts}
         by_num = {c.section_number: c for c in concepts if c.section_number}
         sim = self._sim_matrix(concepts)
         idx = {c.concept_id: i for i, c in enumerate(concepts)}
         parent_of: Dict[str, str] = {}
         edges: List[HierarchyEdge] = []
-
-        # document title/root: earliest concept with the largest font ratio
-        title = None
-        if concepts:
-            title = max(concepts, key=lambda c: (c.font_ratio, -c.order))
-            title.level = 0
-        title.parent_id = None if title else None
-        if title:
-            title.depth = 0
 
         for c in concepts:
             if c is title:
